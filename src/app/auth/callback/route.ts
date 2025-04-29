@@ -28,13 +28,35 @@ export async function GET(request: NextRequest) {
     )
     
     try {
-      await supabase.auth.exchangeCodeForSession(code)
+      // Exchange code for session
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+      if (error) throw error
+
+      // Wait for session to be established and verify user
+      if (data.session && data.user) {
+        // Additional wait to ensure session is fully synced
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        // Verify the session is actually established
+        const { data: sessionCheck, error: sessionError } = await supabase.auth.getSession()
+        if (sessionError || !sessionCheck.session) {
+          console.error('Session verification failed:', sessionError)
+          return NextResponse.redirect(`${requestUrl.origin}/?error=session_failed`)
+        }
+
+        console.log('OAuth session successfully established:', {
+          user: data.user.email,
+          sessionId: data.session.access_token.substring(0, 20) + '...'
+        })
+      } else {
+        throw new Error('No session or user data received')
+      }
     } catch (error) {
-      console.error('Error exchanging code for session:', error)
+      console.error('Error in OAuth callback:', error)
       return NextResponse.redirect(`${requestUrl.origin}/?error=auth_error`)
     }
   }
 
-  // Redirect to home page after successful authentication
-  return NextResponse.redirect(`${requestUrl.origin}/?auth=success`)
+  // Redirect to dashboard after successful authentication
+  return NextResponse.redirect(`${requestUrl.origin}/dashboard`)
 } 
