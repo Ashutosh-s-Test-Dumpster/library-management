@@ -108,9 +108,9 @@ export default function Home() {
       <nav className="fixed top-0 left-0 right-0 z-50 p-6">
         <div className="max-w-6xl mx-auto">
           <div className={`enhanced-blur rounded-2xl px-6 py-4 sleek-shadow ${isAtTop ? 'expanded' : ''}`}>
-            <div className={`flex items-center justify-between nav-content ${isAtTop ? 'expanded' : ''}`}>
+            <div className={`flex items-center justify-between ${isAtTop ? 'expanded' : ''}`}>
               <div className="flex items-center space-x-3">
-                <div className={`w-8 h-8 bg-gold rounded-lg flex items-center justify-center logo-container header-logo ${isAtTop ? 'expanded' : ''}`} onClick={() => scrollToSection('hero')}>
+                <div className="w-8 h-8 bg-gold rounded-lg flex items-center justify-center logo-container header-logo" onClick={() => scrollToSection('hero')}>
                   <span className="text-black font-sans font-bold text-sm cursor-pointer">B</span>
                 </div>
                 <h1 className="font-sans font-bold text-xl text-white cursor-pointer" onClick={() => scrollToSection('hero')}>Bibliotheque</h1>
@@ -265,9 +265,9 @@ export default function Home() {
       <footer className="fixed bottom-0 left-0 right-0 z-50 p-6">
         <div className="max-w-6xl mx-auto">
           <div className={`enhanced-blur rounded-2xl px-6 py-4 sleek-shadow ${isAtBottom ? 'expanded' : ''}`}>
-            <div className={`flex items-center justify-between nav-content ${isAtBottom ? 'expanded' : ''}`}>
+            <div className={`flex items-center justify-between ${isAtBottom ? 'expanded' : ''}`}>
               <div className="flex items-center space-x-3">
-                <div className={`w-6 h-6 bg-gold rounded-lg flex items-center justify-center logo-container footer-logo ${isAtBottom ? 'expanded' : ''}`}>
+                <div className="w-6 h-6 bg-gold rounded-lg flex items-center justify-center logo-container footer-logo">
                   <span className="text-black font-sans font-bold text-xs">B</span>
                 </div>
                 <p className="font-sans text-text-secondary text-sm">
