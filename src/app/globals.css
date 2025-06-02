@@ -1,26 +1,330 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #111111;
+  --card-dark: #0a0a0a;
+  --accent: #333333;
+  --text-primary: #ffffff;
+  --text-secondary: #a0a0a0;
+  --text-muted: #666666;
+  --border: #222222;
+  --gold: #ffeb99;
+  --silver: #c0c0c0;
+  --shadow: rgba(0, 0, 0, 0.5);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-dark: var(--card-dark);
+  --color-accent: var(--accent);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border);
+  --color-gold: var(--gold);
+  --color-silver: var(--silver);
+  --color-shadow: var(--shadow);
+  --font-serif: var(--font-crimson);
+  --font-display: var(--font-playfair);
+  --font-sans: var(--font-inter);
 }
 
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #000000;
+    --foreground: #ffffff;
+    --card: #111111;
+    --card-dark: #0a0a0a;
+    --accent: #333333;
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0a0;
+    --text-muted: #666666;
+    --border: #222222;
+    --gold: #ffeb99;
+    --silver: #c0c0c0;
+    --shadow: rgba(0, 0, 0, 0.5);
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-serif), serif;
+  background-image: 
+    radial-gradient(circle at 20% 20%, rgba(255, 235, 153, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(192, 192, 192, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 50% 10%, rgba(255, 235, 153, 0.03) 0%, transparent 40%),
+    radial-gradient(circle at 10% 90%, rgba(192, 192, 192, 0.03) 0%, transparent 40%),
+    linear-gradient(45deg, transparent 30%, rgba(255, 235, 153, 0.01) 50%, transparent 70%);
+}
+
+/* Sleek background texture */
+.sleek-bg {
+  background: linear-gradient(135deg, #000000 0%, #111111 50%, #000000 100%);
+}
+
+/* Modern floating blur elements */
+.floating-blur {
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  background: rgba(17, 17, 17, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Enhanced blur with stronger effect */
+.enhanced-blur {
+  backdrop-filter: blur(25px) saturate(180%) brightness(110%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%) brightness(110%);
+  background: rgba(17, 17, 17, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+  position: relative;
+  transition: all 0.3s ease-in-out;
+}
+
+/* Expanded state - completely transparent */
+.enhanced-blur.expanded {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+/* Expanded state for internal elements */
+.nav-content {
+  transition: all 0.3s ease-in-out;
+}
+
+.nav-content.expanded {
+  transform: scale(1.05);
+}
+
+/* Logo scaling */
+.logo-container {
+  transition: all 0.3s ease-in-out;
+}
+
+.logo-container.expanded {
+  transform: scale(1.1);
+}
+
+/* Button scaling */
+.nav-button {
+  transition: all 0.3s ease-in-out;
+}
+
+.nav-button.expanded {
+  transform: scale(1.05);
+}
+
+/* Link scaling */
+.nav-link {
+  transition: all 0.3s ease-in-out;
+}
+
+.nav-link.expanded {
+  transform: scale(1.05);
+}
+
+/* Desktop-only expansion effects */
+@media (min-width: 768px) {
+  .nav-content.expanded {
+    transform: scale(1.05);
+  }
+
+  .logo-container.expanded {
+    transform: scale(1.1);
+  }
+
+  .nav-button.expanded {
+    transform: scale(1.05);
+  }
+
+  .nav-link.expanded {
+    transform: scale(1.05);
+  }
+}
+
+/* Mobile - no scaling */
+@media (max-width: 767px) {
+  .nav-content.expanded,
+  .logo-container.expanded,
+  .nav-button.expanded,
+  .nav-link.expanded {
+    transform: none;
+  }
+}
+
+/* iPhone SE specific styles (375x667) */
+@media (max-width: 375px) and (max-height: 667px) {
+  /* Hide B logo in header */
+  .header-logo {
+    display: none;
+  }
+  
+  /* Hide B logo in footer */
+  .footer-logo {
+    display: none;
+  }
+  
+  /* Hide "Admin" text, show only "Login" */
+  .admin-text {
+    display: none;
+  }
+  
+  /* Hide feature descriptions */
+  .feature-description {
+    display: none;
+  }
+}
+
+/* Fallback for browsers that don't support backdrop-filter */
+.enhanced-blur::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(17, 17, 17, 0.8);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border-radius: inherit;
+  z-index: -1;
+}
+
+/* Sleek shadow */
+.sleek-shadow {
+  box-shadow: 
+    0 10px 25px -5px rgba(0, 0, 0, 0.3),
+    0 4px 6px -2px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Remove sleek shadow in expanded state */
+.sleek-shadow.expanded {
+  box-shadow: none !important;
+}
+
+/* Ensure the before pseudo-element is also transparent */
+.enhanced-blur.expanded::before {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  opacity: 0 !important;
+}
+
+/* Make sure container is also transparent in expanded state */
+.enhanced-blur.expanded,
+.enhanced-blur.expanded * {
+  border-color: transparent !important;
+}
+
+/* Animation for floating elements */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(1deg); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 235, 153, 0.1),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+/* Glow effects */
+.glow-gold {
+  box-shadow: 0 0 20px rgba(255, 235, 153, 0.2);
+}
+
+.glow-silver {
+  box-shadow: 0 0 20px rgba(192, 192, 192, 0.2);
+}
+
+/* Hover effects */
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Scroll snap container */
+.snap-container {
+  height: 100vh;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+}
+
+/* Scroll snap sections */
+.snap-section {
+  height: 100vh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* Feature section styling */
+.feature-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  position: relative;
+}
+
+.feature-card-large {
+  max-width: 800px;
+  width: 100%;
+  transition: all 0.3s ease-in-out;
+}
+
+.feature-card-large:hover {
+  transform: scale(1.02);
+}
+
+/* Enhanced feature card */
+.feature-highlight {
+  background: linear-gradient(135deg, rgba(255, 235, 153, 0.1) 0%, rgba(17, 17, 17, 0.9) 100%);
+  border: 2px solid rgba(255, 235, 153, 0.3);
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.3),
+    0 0 40px rgba(255, 235, 153, 0.1);
+}
+
+.feature-normal {
+  background: rgba(17, 17, 17, 0.8);
+  border: 1px solid rgba(51, 51, 51, 0.5);
 }
