@@ -29,15 +29,54 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
   const [filterBy, setFilterBy] = useState<'all' | 'name' | 'author' | 'code'>('all');
 
   const [bookForm, setBookForm] = useState({
+    isbn: '',
     b_code: '',
     b_name: '',
     b_author: '',
     b_price: ''
   });
 
+  // Inline validation errors
+  const [errors, setErrors] = useState<{ [k: string]: string }>({});
+
+  // entry mode for add book modal
+  const [entryMode, setEntryMode] = useState<'isbn' | 'manual'>('isbn');
+
   useEffect(() => {
     loadBooks();
   }, [libraryId]);
+
+  // Keyboard shortcut to open Add Book modal
+  useEffect(() => {
+    const isTextInput = (el: Element | null) => {
+      if (!el) return false;
+      const tag = (el as HTMLElement).tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el as HTMLElement).isContentEditable;
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (showAddModal) return; // already open
+
+      // Ignore if typing in an input/textarea/select
+      if (isTextInput(e.target as Element)) return;
+
+      // "a" key without modifiers
+      if ((e.key === 'a' || e.key === 'A') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setShowAddModal(true);
+        return;
+      }
+
+      // Ctrl/Cmd + N
+      if ((e.key === 'n' || e.key === 'N') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setShowAddModal(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAddModal]);
 
   const loadBooks = async () => {
     try {
@@ -60,27 +99,100 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
 
   const resetForm = () => {
     setBookForm({
+      isbn: '',
       b_code: '',
       b_name: '',
       b_author: '',
       b_price: ''
     });
+    setErrors({});
+    setEntryMode('isbn');
+  };
+
+  // Prefill next code when modal opens
+  useEffect(() => {
+    if (showAddModal) {
+      const maxCode = books.reduce((max, b) => Math.max(max, b.b_code), 0);
+      setBookForm((prev) => ({ ...prev, b_code: (maxCode + 1).toString() }));
+    }
+  }, [showAddModal]);
+
+  // ISBN lookup on blur
+  const lookupISBN = async (isbn: string) => {
+    if (!isbn || !(isbn.length === 10 || isbn.length === 13)) return;
+    try {
+      const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&jscmd=data&format=json`);
+      const data = await res.json();
+      const bookData = data[`ISBN:${isbn}`];
+      if (bookData) {
+        setBookForm((prev) => ({
+          ...prev,
+          b_name: bookData.title || '',
+          b_author: bookData.authors?.[0]?.name || '',
+        }));
+        // Clear any existing ISBN error if lookup succeeded
+        setErrors(prev => {
+          const { isbn, ...rest } = prev;
+          return rest;
+        });
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error looking up ISBN:', err);
+      return false;
+    }
+  };
+
+  const validateForm = async (): Promise<boolean> => {
+    const newErrors: { [k: string]: string } = {};
+
+    if (!bookForm.b_code) newErrors.b_code = 'Book code is required';
+    else if (books.some((b) => b.b_code === parseInt(bookForm.b_code))) newErrors.b_code = 'Code already in use';
+
+    if (entryMode === 'isbn') {
+      if (!bookForm.isbn || !(bookForm.isbn.length === 10 || bookForm.isbn.length === 13)) {
+        newErrors.isbn = 'Valid 10 or 13 digit ISBN required';
+      }
+    }
+
+    if (!bookForm.b_name.trim()) newErrors.b_name = 'Book name is required';
+    if (!bookForm.b_author.trim()) newErrors.b_author = 'Author is required';
+
+    if (bookForm.b_price && parseFloat(bookForm.b_price) < 0) newErrors.b_price = 'Price must be positive';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleAddBook = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
-      // Check if book code already exists
+      // If in ISBN mode and we have an ISBN but no book details, try to look it up first
+      if (entryMode === 'isbn' && bookForm.isbn && (!bookForm.b_name || !bookForm.b_author)) {
+        await lookupISBN(bookForm.isbn);
+        // If lookup failed to find details, show error
+        if (!bookForm.b_name || !bookForm.b_author) {
+          setErrors({ isbn: 'Could not find book details for this ISBN' });
+          return;
+        }
+      }
+
+      // Validate client-side
+      const isValid = await validateForm();
+      if (!isValid) return;
+
+      // Double-check duplicate on server
       const { data: existingBook } = await supabase
         .from('book_management')
         .select('id')
         .eq('library_id', libraryId)
         .eq('b_code', parseInt(bookForm.b_code))
-        .single();
+        .maybeSingle();
 
       if (existingBook) {
-        alert('A book with this code already exists!');
+        setErrors({ b_code: 'Code already in use' });
         return;
       }
 
@@ -103,10 +215,11 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
       setBooks(prev => [...prev, data].sort((a, b) => a.b_code - b.b_code));
       setShowAddModal(false);
       resetForm();
-      alert('Book added successfully!');
+      // Show toast could be implemented; for now reset error state
+      setErrors({});
     } catch (error: any) {
       console.error('Error adding book:', error);
-      alert(`Failed to add book: ${error.message}`);
+      setErrors({ submit: error.message || 'Failed to add book' });
     }
   };
 
@@ -197,6 +310,7 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
   const openEditModal = (book: Book) => {
     setEditingBook(book);
     setBookForm({
+      isbn: '',
       b_code: book.b_code.toString(),
       b_name: book.b_name,
       b_author: book.b_author,
@@ -241,30 +355,40 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
         
         <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-4 w-full md:w-auto">
           {/* Search Controls */}
-          <div className="flex space-x-2">
-            <select
-              value={filterBy}
-              onChange={(e) => setFilterBy(e.target.value as any)}
-              className="px-3 py-2 bg-black border border-border rounded-lg text-white text-sm focus:outline-none focus:border-gold"
-            >
-              <option value="all">All Fields</option>
-              <option value="name">Book Name</option>
-              <option value="author">Author</option>
-              <option value="code">Book Code</option>
-            </select>
-            
-            <input
-              type="text"
-              placeholder="Search books..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="px-4 py-2 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold flex-1 md:w-64"
-            />
+          <div className="flex flex-col space-y-2">
+            <label className="text-text-secondary text-sm">Search books by:</label>
+            <div className="flex space-x-0 group focus-within:ring-1 focus-within:ring-border/60 rounded-lg">
+              <div className="relative">
+                <select
+                  value={filterBy}
+                  onChange={(e) => setFilterBy(e.target.value as any)}
+                  className="h-full px-4 py-2 bg-black border border-r-0 border-green-800 rounded-l-lg text-white text-sm focus:outline-none group-hover:border-green-800 transition-colors"
+                >
+                  <option value="all">All Fields</option>
+                  <option value="name">Book Name</option>
+                  <option value="author">Author</option>
+                  <option value="code">Book Code</option>
+                </select>
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-text-secondary">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+              
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="flex-1 px-4 py-2 bg-black border border-l-0 border-green-500 rounded-r-lg text-white placeholder-text-secondary focus:outline-none group-hover:border-green-500/60 transition-colors min-w-[200px]"
+              />
+            </div>
           </div>
           
           <button
             onClick={() => setShowAddModal(true)}
-            className="bg-gold text-black px-4 py-2 rounded-lg font-sans hover:bg-yellow-200 transition-colors whitespace-nowrap"
+            className="bg-gold text-black px-4 py-2 rounded-lg font-sans hover:bg-yellow-200 transition-colors whitespace-nowrap md:self-end"
           >
             Add Book
           </button>
@@ -341,41 +465,101 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
               </div>
 
               <form onSubmit={handleAddBook} className="space-y-4">
+                {/* Entry mode tabs */}
+                <div className="flex mb-4 space-x-2 justify-center">
+                  {['isbn', 'manual'].map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => {
+                        setEntryMode(mode as any);
+                        // Reset form when switching to manual mode
+                        if (mode === 'manual') {
+                          setBookForm(prev => ({
+                            ...prev,
+                            isbn: '',
+                            b_name: '',
+                            b_author: ''
+                          }));
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-lg font-sans text-sm transition-colors ${
+                        entryMode === mode
+                          ? 'bg-gold text-black'
+                          : 'text-text-secondary hover:text-white'
+                      }`}
+                    >
+                      {mode === 'isbn' ? 'ISBN Lookup' : 'Manual Entry'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ISBN Field */}
+                {entryMode === 'isbn' && (
+                  <div>
+                    <label className="block text-white text-sm font-medium mb-2">ISBN</label>
+                    <input
+                      type="text"
+                      value={bookForm.isbn}
+                      onChange={(e) => setBookForm(prev => ({ ...prev, isbn: e.target.value }))}
+                      onBlur={(e) => lookupISBN(e.target.value)}
+                      className={`w-full px-4 py-3 bg-black border ${errors.isbn ? 'border-red-500' : 'border-border'} rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold`}
+                      placeholder="e.g., 9780062801970"
+                    />
+                    {errors.isbn && <p className="text-red-500 text-xs mt-1">{errors.isbn}</p>}
+                    {/* Show book details if found via ISBN */}
+                    {bookForm.b_name && bookForm.b_author && (
+                      <div className="mt-4 p-4 bg-gold/10 border border-gold/20 rounded-lg">
+                        <p className="text-white font-medium mb-1">{bookForm.b_name}</p>
+                        <p className="text-text-secondary text-sm">by {bookForm.b_author}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-white text-sm font-medium mb-2">Book Code</label>
                   <input
                     type="number"
                     value={bookForm.b_code}
                     onChange={(e) => setBookForm(prev => ({ ...prev, b_code: e.target.value }))}
-                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    className={`w-full px-4 py-3 bg-black border ${errors.b_code ? 'border-red-500' : 'border-border'} rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold`}
                     placeholder="e.g., 101"
                     required
                   />
+                  {errors.b_code && <p className="text-red-500 text-xs mt-1">{errors.b_code}</p>}
                 </div>
 
-                <div>
-                  <label className="block text-white text-sm font-medium mb-2">Book Name</label>
-                  <input
-                    type="text"
-                    value={bookForm.b_name}
-                    onChange={(e) => setBookForm(prev => ({ ...prev, b_name: e.target.value }))}
-                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                    placeholder="e.g., The Great Gatsby"
-                    required
-                  />
-                </div>
+                {/* Only show name and author fields in manual mode */}
+                {entryMode === 'manual' && (
+                  <>
+                    <div>
+                      <label className="block text-white text-sm font-medium mb-2">Book Name</label>
+                      <input
+                        type="text"
+                        value={bookForm.b_name}
+                        onChange={(e) => setBookForm(prev => ({ ...prev, b_name: e.target.value }))}
+                        className={`w-full px-4 py-3 bg-black border ${errors.b_name ? 'border-red-500' : 'border-border'} rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold`}
+                        placeholder="e.g., The Great Gatsby"
+                        required
+                      />
+                      {errors.b_name && <p className="text-red-500 text-xs mt-1">{errors.b_name}</p>}
+                    </div>
 
-                <div>
-                  <label className="block text-white text-sm font-medium mb-2">Author</label>
-                  <input
-                    type="text"
-                    value={bookForm.b_author}
-                    onChange={(e) => setBookForm(prev => ({ ...prev, b_author: e.target.value }))}
-                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                    placeholder="e.g., F. Scott Fitzgerald"
-                    required
-                  />
-                </div>
+                    <div>
+                      <label className="block text-white text-sm font-medium mb-2">Author</label>
+                      <input
+                        type="text"
+                        value={bookForm.b_author}
+                        onChange={(e) => setBookForm(prev => ({ ...prev, b_author: e.target.value }))}
+                        className={`w-full px-4 py-3 bg-black border ${errors.b_author ? 'border-red-500' : 'border-border'} rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold`}
+                        placeholder="e.g., F. Scott Fitzgerald"
+                        required
+                      />
+                      {errors.b_author && <p className="text-red-500 text-xs mt-1">{errors.b_author}</p>}
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <label className="block text-white text-sm font-medium mb-2">Price ($)</label>

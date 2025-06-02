@@ -53,6 +53,9 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
     issue_date: new Date().toISOString().split('T')[0]
   });
 
+  const [filterBy, setFilterBy] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+
   useEffect(() => {
     loadData();
   }, [libraryId]);
@@ -248,12 +251,46 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
         <h3 className="text-2xl font-bold text-white">Issue Management</h3>
         
-        <button
-          onClick={() => setShowIssueModal(true)}
-          className="bg-gold text-black px-4 py-2 rounded-lg font-sans hover:bg-yellow-200 transition-colors whitespace-nowrap"
-        >
-          Issue Book
-        </button>
+        <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-4 w-full md:w-auto">
+          {/* Search Controls */}
+          <div className="flex flex-col space-y-2">
+            <label className="text-text-secondary text-sm">Search issues by:</label>
+            <div className="flex space-x-0 group focus-within:ring-1 focus-within:ring-border/60 rounded-lg">
+              <div className="relative">
+                <select
+                  value={filterBy}
+                  onChange={(e) => setFilterBy(e.target.value as any)}
+                  className="h-full px-4 py-2 bg-black border border-r-0 border-green-800 rounded-l-lg text-white text-sm focus:outline-none group-hover:border-green-800 transition-colors"
+                >
+                  <option value="all">All Fields</option>
+                  <option value="book">Book Code</option>
+                  <option value="member">Member Code</option>
+                  <option value="status">Status</option>
+                </select>
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-text-secondary">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+              
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="flex-1 px-4 py-2 bg-black border border-l-0 border-green-500 rounded-r-lg text-white placeholder-text-secondary focus:outline-none group-hover:border-green-500/60 transition-colors min-w-[200px]"
+              />
+            </div>
+          </div>
+          
+          <button
+            onClick={() => setShowIssueModal(true)}
+            className="bg-gold text-black px-4 py-2 rounded-lg font-sans hover:bg-yellow-200 transition-colors whitespace-nowrap md:self-end"
+          >
+            Issue Book
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
