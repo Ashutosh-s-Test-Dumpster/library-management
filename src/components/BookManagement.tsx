@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import Portal from '@/components/Portal';
 
 interface Book {
   id: number;
@@ -321,184 +322,188 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
 
       {/* Add Book Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
-            onClick={() => {
-              setShowAddModal(false);
-              resetForm();
-            }}
-          ></div>
-          
-          <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
-            <div className="text-center mb-6">
-              <div className="w-12 h-12 bg-gold rounded-xl flex items-center justify-center mx-auto mb-4">
-                <span className="text-black font-sans font-bold text-lg">📚</span>
+        <Portal>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div 
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+              onClick={() => {
+                setShowAddModal(false);
+                resetForm();
+              }}
+            ></div>
+            
+            <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
+              <div className="text-center mb-6">
+                <div className="w-12 h-12 bg-gold rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-black font-sans font-bold text-lg">📚</span>
+                </div>
+                <h2 className="font-sans text-2xl font-bold text-white mb-2">Add New Book</h2>
               </div>
-              <h2 className="font-sans text-2xl font-bold text-white mb-2">Add New Book</h2>
+
+              <form onSubmit={handleAddBook} className="space-y-4">
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Book Code</label>
+                  <input
+                    type="number"
+                    value={bookForm.b_code}
+                    onChange={(e) => setBookForm(prev => ({ ...prev, b_code: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    placeholder="e.g., 101"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Book Name</label>
+                  <input
+                    type="text"
+                    value={bookForm.b_name}
+                    onChange={(e) => setBookForm(prev => ({ ...prev, b_name: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    placeholder="e.g., The Great Gatsby"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Author</label>
+                  <input
+                    type="text"
+                    value={bookForm.b_author}
+                    onChange={(e) => setBookForm(prev => ({ ...prev, b_author: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    placeholder="e.g., F. Scott Fitzgerald"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Price ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={bookForm.b_price}
+                    onChange={(e) => setBookForm(prev => ({ ...prev, b_price: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    placeholder="e.g., 15.99"
+                    required
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddModal(false);
+                      resetForm();
+                    }}
+                    className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-gold text-black py-3 rounded-lg font-sans font-medium hover:bg-yellow-200 transition-colors"
+                  >
+                    Add Book
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <form onSubmit={handleAddBook} className="space-y-4">
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Book Code</label>
-                <input
-                  type="number"
-                  value={bookForm.b_code}
-                  onChange={(e) => setBookForm(prev => ({ ...prev, b_code: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  placeholder="e.g., 101"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Book Name</label>
-                <input
-                  type="text"
-                  value={bookForm.b_name}
-                  onChange={(e) => setBookForm(prev => ({ ...prev, b_name: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  placeholder="e.g., The Great Gatsby"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Author</label>
-                <input
-                  type="text"
-                  value={bookForm.b_author}
-                  onChange={(e) => setBookForm(prev => ({ ...prev, b_author: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  placeholder="e.g., F. Scott Fitzgerald"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Price ($)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={bookForm.b_price}
-                  onChange={(e) => setBookForm(prev => ({ ...prev, b_price: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  placeholder="e.g., 15.99"
-                  required
-                />
-              </div>
-
-              <div className="flex space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddModal(false);
-                    resetForm();
-                  }}
-                  className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-gold text-black py-3 rounded-lg font-sans font-medium hover:bg-yellow-200 transition-colors"
-                >
-                  Add Book
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Portal>
       )}
 
       {/* Edit Book Modal */}
       {showEditModal && editingBook && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
-            onClick={() => {
-              setShowEditModal(false);
-              setEditingBook(null);
-              resetForm();
-            }}
-          ></div>
-          
-          <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
-            <div className="text-center mb-6">
-              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <span className="text-white font-sans font-bold text-lg">✏️</span>
+        <Portal>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div 
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+              onClick={() => {
+                setShowEditModal(false);
+                setEditingBook(null);
+                resetForm();
+              }}
+            ></div>
+            
+            <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
+              <div className="text-center mb-6">
+                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white font-sans font-bold text-lg">✏️</span>
+                </div>
+                <h2 className="font-sans text-2xl font-bold text-white mb-2">Edit Book</h2>
               </div>
-              <h2 className="font-sans text-2xl font-bold text-white mb-2">Edit Book</h2>
+
+              <form onSubmit={handleEditBook} className="space-y-4">
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Book Code</label>
+                  <input
+                    type="number"
+                    value={bookForm.b_code}
+                    onChange={(e) => setBookForm(prev => ({ ...prev, b_code: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Book Name</label>
+                  <input
+                    type="text"
+                    value={bookForm.b_name}
+                    onChange={(e) => setBookForm(prev => ({ ...prev, b_name: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Author</label>
+                  <input
+                    type="text"
+                    value={bookForm.b_author}
+                    onChange={(e) => setBookForm(prev => ({ ...prev, b_author: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Price ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={bookForm.b_price}
+                    onChange={(e) => setBookForm(prev => ({ ...prev, b_price: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    required
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditingBook(null);
+                      resetForm();
+                    }}
+                    className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Update Book
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <form onSubmit={handleEditBook} className="space-y-4">
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Book Code</label>
-                <input
-                  type="number"
-                  value={bookForm.b_code}
-                  onChange={(e) => setBookForm(prev => ({ ...prev, b_code: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Book Name</label>
-                <input
-                  type="text"
-                  value={bookForm.b_name}
-                  onChange={(e) => setBookForm(prev => ({ ...prev, b_name: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Author</label>
-                <input
-                  type="text"
-                  value={bookForm.b_author}
-                  onChange={(e) => setBookForm(prev => ({ ...prev, b_author: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Price ($)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={bookForm.b_price}
-                  onChange={(e) => setBookForm(prev => ({ ...prev, b_price: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  required
-                />
-              </div>
-
-              <div className="flex space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setEditingBook(null);
-                    resetForm();
-                  }}
-                  className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-blue-700 transition-colors"
-                >
-                  Update Book
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Portal>
       )}
     </div>
   );
