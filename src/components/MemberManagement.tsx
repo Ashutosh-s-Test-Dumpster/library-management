@@ -293,6 +293,35 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
     }
   }, [showAddModal]);
 
+  // Add keyboard shortcut handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if we're in an input field or any modal is open
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        showAddModal ||
+        showEditModal
+      ) {
+        return;
+      }
+
+      // Open add modal with 'a' key
+      if (e.key === 'a' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setShowAddModal(true);
+      }
+      // Open add modal with Ctrl+n or Cmd+n
+      if (e.key === 'n' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setShowAddModal(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAddModal, showEditModal]);
+
   if (loading) {
     return (
       <div className="text-center py-12">

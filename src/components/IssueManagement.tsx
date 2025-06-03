@@ -45,7 +45,11 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [showIssueModal, setShowIssueModal] = useState(false);
+  const [showBookSearchModal, setShowBookSearchModal] = useState(false);
+  const [showMemberSearchModal, setShowMemberSearchModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'returned' | 'all'>('active');
+  const [bookSearchTerm, setBookSearchTerm] = useState('');
+  const [memberSearchTerm, setMemberSearchTerm] = useState('');
 
   const [issueForm, setIssueForm] = useState({
     book_code: '',
@@ -59,6 +63,36 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
   useEffect(() => {
     loadData();
   }, [libraryId]);
+
+  // Add keyboard shortcut handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if we're in an input field or any modal is open
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        showIssueModal ||
+        showBookSearchModal ||
+        showMemberSearchModal
+      ) {
+        return;
+      }
+
+      // Open issue modal with 'a' key
+      if (e.key === 'a' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setShowIssueModal(true);
+      }
+      // Open issue modal with Ctrl+n or Cmd+n
+      if (e.key === 'n' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setShowIssueModal(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showIssueModal, showBookSearchModal, showMemberSearchModal]);
 
   const loadData = async () => {
     try {
@@ -223,6 +257,38 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
       .map(issue => issue.ib_code);
     
     return books.filter(book => !issuedBookCodes.includes(book.b_code));
+  };
+
+  const getFilteredAvailableBooks = () => {
+    const available = getAvailableBooks();
+    if (!bookSearchTerm) return available;
+    
+    return available.filter(book => 
+      book.b_name.toLowerCase().includes(bookSearchTerm.toLowerCase()) ||
+      book.b_author.toLowerCase().includes(bookSearchTerm.toLowerCase()) ||
+      book.b_code.toString().includes(bookSearchTerm)
+    );
+  };
+
+  const getFilteredMembers = () => {
+    if (!memberSearchTerm) return members;
+    
+    return members.filter(member => 
+      member.m_name.toLowerCase().includes(memberSearchTerm.toLowerCase()) ||
+      member.m_code.toString().includes(memberSearchTerm)
+    );
+  };
+
+  const handleBookSelect = (book: Book) => {
+    setIssueForm(prev => ({ ...prev, book_code: book.b_code.toString() }));
+    setShowBookSearchModal(false);
+    setBookSearchTerm('');
+  };
+
+  const handleMemberSelect = (member: Member) => {
+    setIssueForm(prev => ({ ...prev, member_code: member.m_code.toString() }));
+    setShowMemberSearchModal(false);
+    setMemberSearchTerm('');
   };
 
   const getDaysOverdue = (issueDate: string) => {
@@ -470,40 +536,50 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
 
               <form onSubmit={handleIssueBook} className="space-y-4">
                 <div>
-                  <label className="block text-white text-sm font-medium mb-2">Book Code</label>
-                  <select
-                    value={issueForm.book_code}
-                    onChange={(e) => setIssueForm(prev => ({ ...prev, book_code: e.target.value }))}
-                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold"
-                    required
-                  >
-                    <option value="">Select a book</option>
-                    {availableBooks.map((book) => (
-                      <option key={book.id} value={book.b_code}>
-                        #{book.b_code} - {book.b_name} by {book.b_author}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="block text-white text-sm font-medium mb-2">Book</label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={issueForm.book_code ? `#${issueForm.book_code} - ${books.find(b => b.b_code === parseInt(issueForm.book_code))?.b_name || ''}` : ''}
+                      className="flex-1 px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold cursor-pointer"
+                      readOnly
+                      onClick={() => setShowBookSearchModal(true)}
+                      placeholder="Click to search for a book"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowBookSearchModal(true)}
+                      className="px-4 py-3 bg-gold text-black rounded-lg hover:bg-yellow-200 transition-colors"
+                    >
+                      Search
+                    </button>
+                  </div>
                   {availableBooks.length === 0 && (
                     <p className="text-red-400 text-sm mt-1">No books available for issue</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-white text-sm font-medium mb-2">Member Code</label>
-                  <select
-                    value={issueForm.member_code}
-                    onChange={(e) => setIssueForm(prev => ({ ...prev, member_code: e.target.value }))}
-                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold"
-                    required
-                  >
-                    <option value="">Select a member</option>
-                    {members.map((member) => (
-                      <option key={member.id} value={member.m_code}>
-                        #{member.m_code} - {member.m_name}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="block text-white text-sm font-medium mb-2">Member</label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={issueForm.member_code ? `#${issueForm.member_code} - ${members.find(m => m.m_code === parseInt(issueForm.member_code))?.m_name || ''}` : ''}
+                      className="flex-1 px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold cursor-pointer"
+                      readOnly
+                      onClick={() => setShowMemberSearchModal(true)}
+                      placeholder="Click to search for a member"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowMemberSearchModal(true)}
+                      className="px-4 py-3 bg-gold text-black rounded-lg hover:bg-yellow-200 transition-colors"
+                    >
+                      Search
+                    </button>
+                  </div>
                   {members.length === 0 && (
                     <p className="text-red-400 text-sm mt-1">No members available</p>
                   )}
@@ -540,6 +616,122 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </Portal>
+      )}
+
+      {/* Book Search Modal */}
+      {showBookSearchModal && (
+        <Portal>
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <div 
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+              onClick={() => setShowBookSearchModal(false)}
+            ></div>
+            
+            <div className="relative w-full max-w-2xl bg-card border border-border rounded-2xl p-8 shadow-2xl max-h-[80vh] flex flex-col">
+              <div className="text-center mb-6">
+                <h2 className="font-sans text-2xl font-bold text-white mb-4">Search Books</h2>
+                <input
+                  type="text"
+                  value={bookSearchTerm}
+                  onChange={(e) => setBookSearchTerm(e.target.value)}
+                  placeholder="Search by book name, author, or code..."
+                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                {getFilteredAvailableBooks().length === 0 ? (
+                  <div className="text-center py-8 text-text-secondary">
+                    No books found matching your search
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {getFilteredAvailableBooks().map((book) => (
+                      <button
+                        key={book.id}
+                        onClick={() => handleBookSelect(book)}
+                        className="w-full text-left p-4 bg-black border border-border rounded-lg hover:border-gold transition-colors group"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="text-white font-medium group-hover:text-gold transition-colors">
+                              {book.b_name}
+                            </div>
+                            <div className="text-text-secondary text-sm">
+                              by {book.b_author}
+                            </div>
+                          </div>
+                          <div className="bg-gold/10 text-gold px-2 py-1 rounded text-sm">
+                            #{book.b_code}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
+
+      {/* Member Search Modal */}
+      {showMemberSearchModal && (
+        <Portal>
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <div 
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+              onClick={() => setShowMemberSearchModal(false)}
+            ></div>
+            
+            <div className="relative w-full max-w-2xl bg-card border border-border rounded-2xl p-8 shadow-2xl max-h-[80vh] flex flex-col">
+              <div className="text-center mb-6">
+                <h2 className="font-sans text-2xl font-bold text-white mb-4">Search Members</h2>
+                <input
+                  type="text"
+                  value={memberSearchTerm}
+                  onChange={(e) => setMemberSearchTerm(e.target.value)}
+                  placeholder="Search by member name, code, or phone..."
+                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                {getFilteredMembers().length === 0 ? (
+                  <div className="text-center py-8 text-text-secondary">
+                    No members found matching your search
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {getFilteredMembers().map((member) => (
+                      <button
+                        key={member.id}
+                        onClick={() => handleMemberSelect(member)}
+                        className="w-full text-left p-4 bg-black border border-border rounded-lg hover:border-gold transition-colors group"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="text-white font-medium group-hover:text-gold transition-colors">
+                              {member.m_name}
+                            </div>
+                            <div className="text-text-secondary text-sm">
+                              {member.m_phone}
+                            </div>
+                          </div>
+                          <div className="bg-gold/10 text-gold px-2 py-1 rounded text-sm">
+                            #{member.m_code}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </Portal>
