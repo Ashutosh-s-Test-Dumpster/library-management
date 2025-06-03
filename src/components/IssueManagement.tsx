@@ -83,11 +83,6 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
         e.preventDefault();
         setShowIssueModal(true);
       }
-      // Open issue modal with Ctrl+n or Cmd+n
-      if (e.key === 'n' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        setShowIssueModal(true);
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);

@@ -311,11 +311,6 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
         e.preventDefault();
         setShowAddModal(true);
       }
-      // Open add modal with Ctrl+n or Cmd+n
-      if (e.key === 'n' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        setShowAddModal(true);
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
