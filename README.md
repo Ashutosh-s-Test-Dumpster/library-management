@@ -1,3 +1,16 @@
+# Bibliotheque - Library Management System
+
+A modern, comprehensive library management system built with Next.js, designed to streamline library operations and enhance administrative efficiency.
+
+## Documentation
+
+For detailed information about using this:
+
+- [Main Documentation](https://capable-twist-8f4.notion.site/Bibliotheque-Library-Management-207ecc0d8b2880e1a6efde72da0c0cc8)
+- [Book Management Guide](https://www.notion.so/For-Users-207ecc0d8b28803d9b2fceda3d5b1330?source=copy_link#207ecc0d8b28801b920ed37d394d02bc)
+- [Member Management Guide](https://www.notion.so/For-Users-207ecc0d8b28803d9b2fceda3d5b1330?source=copy_link#207ecc0d8b2880568cc9cfa577b748db)
+- [Issue/Return System Guide](https://www.notion.so/For-Users-207ecc0d8b28803d9b2fceda3d5b1330?source=copy_link#207ecc0d8b2880fab356cab62b9f6e27)
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
