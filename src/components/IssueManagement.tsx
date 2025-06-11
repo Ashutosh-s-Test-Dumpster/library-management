@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import Portal from '@/components/Portal';
 
 interface Issue {
   id: number;
@@ -412,97 +413,99 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
 
       {/* Issue Book Modal */}
       {showIssueModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
-            onClick={() => {
-              setShowIssueModal(false);
-              resetForm();
-            }}
-          ></div>
-          
-          <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
-            <div className="text-center mb-6">
-              <div className="w-12 h-12 bg-gold rounded-xl flex items-center justify-center mx-auto mb-4">
-                <span className="text-black font-sans font-bold text-lg">📋</span>
+        <Portal>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div 
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+              onClick={() => {
+                setShowIssueModal(false);
+                resetForm();
+              }}
+            ></div>
+            
+            <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
+              <div className="text-center mb-6">
+                <div className="w-12 h-12 bg-gold rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-black font-sans font-bold text-lg">📋</span>
+                </div>
+                <h2 className="font-sans text-2xl font-bold text-white mb-2">Issue Book</h2>
               </div>
-              <h2 className="font-sans text-2xl font-bold text-white mb-2">Issue Book</h2>
+
+              <form onSubmit={handleIssueBook} className="space-y-4">
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Book Code</label>
+                  <select
+                    value={issueForm.book_code}
+                    onChange={(e) => setIssueForm(prev => ({ ...prev, book_code: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold"
+                    required
+                  >
+                    <option value="">Select a book</option>
+                    {availableBooks.map((book) => (
+                      <option key={book.id} value={book.b_code}>
+                        #{book.b_code} - {book.b_name} by {book.b_author}
+                      </option>
+                    ))}
+                  </select>
+                  {availableBooks.length === 0 && (
+                    <p className="text-red-400 text-sm mt-1">No books available for issue</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Member Code</label>
+                  <select
+                    value={issueForm.member_code}
+                    onChange={(e) => setIssueForm(prev => ({ ...prev, member_code: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold"
+                    required
+                  >
+                    <option value="">Select a member</option>
+                    {members.map((member) => (
+                      <option key={member.id} value={member.m_code}>
+                        #{member.m_code} - {member.m_name}
+                      </option>
+                    ))}
+                  </select>
+                  {members.length === 0 && (
+                    <p className="text-red-400 text-sm mt-1">No members available</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Issue Date</label>
+                  <input
+                    type="date"
+                    value={issueForm.issue_date}
+                    onChange={(e) => setIssueForm(prev => ({ ...prev, issue_date: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold"
+                    required
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowIssueModal(false);
+                      resetForm();
+                    }}
+                    className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={availableBooks.length === 0 || members.length === 0}
+                    className="flex-1 bg-gold text-black py-3 rounded-lg font-sans font-medium hover:bg-yellow-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Issue Book
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <form onSubmit={handleIssueBook} className="space-y-4">
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Book Code</label>
-                <select
-                  value={issueForm.book_code}
-                  onChange={(e) => setIssueForm(prev => ({ ...prev, book_code: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold"
-                  required
-                >
-                  <option value="">Select a book</option>
-                  {availableBooks.map((book) => (
-                    <option key={book.id} value={book.b_code}>
-                      #{book.b_code} - {book.b_name} by {book.b_author}
-                    </option>
-                  ))}
-                </select>
-                {availableBooks.length === 0 && (
-                  <p className="text-red-400 text-sm mt-1">No books available for issue</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Member Code</label>
-                <select
-                  value={issueForm.member_code}
-                  onChange={(e) => setIssueForm(prev => ({ ...prev, member_code: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold"
-                  required
-                >
-                  <option value="">Select a member</option>
-                  {members.map((member) => (
-                    <option key={member.id} value={member.m_code}>
-                      #{member.m_code} - {member.m_name}
-                    </option>
-                  ))}
-                </select>
-                {members.length === 0 && (
-                  <p className="text-red-400 text-sm mt-1">No members available</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Issue Date</label>
-                <input
-                  type="date"
-                  value={issueForm.issue_date}
-                  onChange={(e) => setIssueForm(prev => ({ ...prev, issue_date: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold"
-                  required
-                />
-              </div>
-
-              <div className="flex space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowIssueModal(false);
-                    resetForm();
-                  }}
-                  className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={availableBooks.length === 0 || members.length === 0}
-                  className="flex-1 bg-gold text-black py-3 rounded-lg font-sans font-medium hover:bg-yellow-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Issue Book
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Portal>
       )}
     </div>
   );

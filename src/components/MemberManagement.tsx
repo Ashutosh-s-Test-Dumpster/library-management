@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import Portal from '@/components/Portal';
 
 interface Member {
   id: number;
@@ -346,159 +347,163 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
 
       {/* Add Member Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
-            onClick={() => {
-              setShowAddModal(false);
-              resetForm();
-            }}
-          ></div>
-          
-          <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
-            <div className="text-center mb-6">
-              <div className="w-12 h-12 bg-gold rounded-xl flex items-center justify-center mx-auto mb-4">
-                <span className="text-black font-sans font-bold text-lg">👥</span>
+        <Portal>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div 
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+              onClick={() => {
+                setShowAddModal(false);
+                resetForm();
+              }}
+            ></div>
+            
+            <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
+              <div className="text-center mb-6">
+                <div className="w-12 h-12 bg-gold rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-black font-sans font-bold text-lg">👥</span>
+                </div>
+                <h2 className="font-sans text-2xl font-bold text-white mb-2">Add New Member</h2>
               </div>
-              <h2 className="font-sans text-2xl font-bold text-white mb-2">Add New Member</h2>
+
+              <form onSubmit={handleAddMember} className="space-y-4">
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Member Code</label>
+                  <input
+                    type="number"
+                    value={memberForm.m_code}
+                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_code: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    placeholder="e.g., 1001"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Full Name</label>
+                  <input
+                    type="text"
+                    value={memberForm.m_name}
+                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_name: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    placeholder="e.g., John Doe"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={memberForm.m_phone}
+                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_phone: e.target.value.replace(/\D/g, '') }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    placeholder="e.g., 1234567890"
+                    required
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddModal(false);
+                      resetForm();
+                    }}
+                    className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-gold text-black py-3 rounded-lg font-sans font-medium hover:bg-yellow-200 transition-colors"
+                  >
+                    Add Member
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <form onSubmit={handleAddMember} className="space-y-4">
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Member Code</label>
-                <input
-                  type="number"
-                  value={memberForm.m_code}
-                  onChange={(e) => setMemberForm(prev => ({ ...prev, m_code: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  placeholder="e.g., 1001"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Full Name</label>
-                <input
-                  type="text"
-                  value={memberForm.m_name}
-                  onChange={(e) => setMemberForm(prev => ({ ...prev, m_name: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  placeholder="e.g., John Doe"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Phone Number</label>
-                <input
-                  type="tel"
-                  value={memberForm.m_phone}
-                  onChange={(e) => setMemberForm(prev => ({ ...prev, m_phone: e.target.value.replace(/\D/g, '') }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  placeholder="e.g., 1234567890"
-                  required
-                />
-              </div>
-
-              <div className="flex space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddModal(false);
-                    resetForm();
-                  }}
-                  className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-gold text-black py-3 rounded-lg font-sans font-medium hover:bg-yellow-200 transition-colors"
-                >
-                  Add Member
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Portal>
       )}
 
       {/* Edit Member Modal */}
       {showEditModal && editingMember && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
-            onClick={() => {
-              setShowEditModal(false);
-              setEditingMember(null);
-              resetForm();
-            }}
-          ></div>
-          
-          <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
-            <div className="text-center mb-6">
-              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <span className="text-white font-sans font-bold text-lg">✏️</span>
+        <Portal>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div 
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+              onClick={() => {
+                setShowEditModal(false);
+                setEditingMember(null);
+                resetForm();
+              }}
+            ></div>
+            
+            <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
+              <div className="text-center mb-6">
+                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white font-sans font-bold text-lg">✏️</span>
+                </div>
+                <h2 className="font-sans text-2xl font-bold text-white mb-2">Edit Member</h2>
               </div>
-              <h2 className="font-sans text-2xl font-bold text-white mb-2">Edit Member</h2>
+
+              <form onSubmit={handleEditMember} className="space-y-4">
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Member Code</label>
+                  <input
+                    type="number"
+                    value={memberForm.m_code}
+                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_code: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Full Name</label>
+                  <input
+                    type="text"
+                    value={memberForm.m_name}
+                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_name: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={memberForm.m_phone}
+                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_phone: e.target.value.replace(/\D/g, '') }))}
+                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    required
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditingMember(null);
+                      resetForm();
+                    }}
+                    className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Update Member
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <form onSubmit={handleEditMember} className="space-y-4">
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Member Code</label>
-                <input
-                  type="number"
-                  value={memberForm.m_code}
-                  onChange={(e) => setMemberForm(prev => ({ ...prev, m_code: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Full Name</label>
-                <input
-                  type="text"
-                  value={memberForm.m_name}
-                  onChange={(e) => setMemberForm(prev => ({ ...prev, m_name: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">Phone Number</label>
-                <input
-                  type="tel"
-                  value={memberForm.m_phone}
-                  onChange={(e) => setMemberForm(prev => ({ ...prev, m_phone: e.target.value.replace(/\D/g, '') }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  required
-                />
-              </div>
-
-              <div className="flex space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setEditingMember(null);
-                    resetForm();
-                  }}
-                  className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-blue-700 transition-colors"
-                >
-                  Update Member
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+        </Portal>
       )}
     </div>
   );

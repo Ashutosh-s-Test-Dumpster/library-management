@@ -393,6 +393,44 @@ export default function Dashboard() {
     }
   };
 
+  // Real-time updates for stats
+  useEffect(() => {
+    if (!currentLibrary) return;
+
+    // Tables to listen for changes
+    const tables = ['book_management', 'member_management', 'issue_management'];
+
+    const channels = tables.map((table) => {
+      return supabase
+        .channel(`${table}-changes-${currentLibrary.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table,
+            filter: `library_id=eq.${currentLibrary.id}`
+          },
+          () => {
+            // Reload stats on any change related to this library
+            loadStats(currentLibrary.id);
+          }
+        )
+        .subscribe();
+    });
+
+    // Cleanup
+    return () => {
+      channels.forEach((ch) => {
+        try {
+          supabase.removeChannel(ch);
+        } catch (_) {
+          /* ignore */
+        }
+      });
+    };
+  }, [currentLibrary]);
+
   // Show loading state while verifying authentication
   if (isLoading || !isAuthenticated) {
     return (
