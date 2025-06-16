@@ -25,7 +25,7 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterBy, setFilterBy] = useState<'all' | 'name' | 'phone' | 'code'>('all');
+  const [filterBy, setFilterBy] = useState<'all' | 'name' | 'code'>('all');
 
   const [memberForm, setMemberForm] = useState({
     m_code: '',
@@ -205,14 +205,11 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
     switch (filterBy) {
       case 'name':
         return member.m_name.toLowerCase().includes(searchTerm.toLowerCase());
-      case 'phone':
-        return member.m_phone.includes(searchTerm);
       case 'code':
         return member.m_code.toString().includes(searchTerm);
       default:
         return (
           member.m_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          member.m_phone.includes(searchTerm) ||
           member.m_code.toString().includes(searchTerm)
         );
     }
@@ -243,30 +240,39 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
         
         <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-4 w-full md:w-auto">
           {/* Search Controls */}
-          <div className="flex space-x-2">
-            <select
-              value={filterBy}
-              onChange={(e) => setFilterBy(e.target.value as any)}
-              className="px-3 py-2 bg-black border border-border rounded-lg text-white text-sm focus:outline-none focus:border-gold"
-            >
-              <option value="all">All Fields</option>
-              <option value="name">Member Name</option>
-              <option value="phone">Phone Number</option>
-              <option value="code">Member Code</option>
-            </select>
-            
-            <input
-              type="text"
-              placeholder="Search members..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="px-4 py-2 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold flex-1 md:w-64"
-            />
+          <div className="flex flex-col space-y-2">
+            <label className="text-text-secondary text-sm">Search members by:</label>
+            <div className="flex space-x-0 group focus-within:ring-1 focus-within:ring-border/60 rounded-lg">
+              <div className="relative">
+                <select
+                  value={filterBy}
+                  onChange={(e) => setFilterBy(e.target.value as any)}
+                  className="h-full px-4 py-2 bg-black border border-r-0 border-green-800 rounded-l-lg text-white text-sm focus:outline-none group-hover:border-green-800 transition-colors"
+                >
+                  <option value="all">All Fields</option>
+                  <option value="name">Member Name</option>
+                  <option value="code">Member Code</option>
+                </select>
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-text-secondary">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+              
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="flex-1 px-4 py-2 bg-black border border-l-0 border-green-500 rounded-r-lg text-white placeholder-text-secondary focus:outline-none group-hover:border-green-500/60 transition-colors min-w-[200px]"
+              />
+            </div>
           </div>
           
           <button
             onClick={() => setShowAddModal(true)}
-            className="bg-gold text-black px-4 py-2 rounded-lg font-sans hover:bg-yellow-200 transition-colors whitespace-nowrap"
+            className="bg-gold text-black px-4 py-2 rounded-lg font-sans hover:bg-yellow-200 transition-colors whitespace-nowrap md:self-end"
           >
             Add Member
           </button>

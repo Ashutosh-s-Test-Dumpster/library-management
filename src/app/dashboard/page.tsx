@@ -241,12 +241,25 @@ export default function Dashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No authenticated user');
 
+      // Check for duplicate library name for this user (case-insensitive)
+      const { data: existingLib } = await supabase
+        .from('libraries')
+        .select('id')
+        .eq('user_id', user.id)
+        .ilike('name', libraryForm.name.trim())
+        .single();
+
+      if (existingLib) {
+        alert('You already have a library with this name. Please choose a different name.');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('libraries')
         .insert([
           {
-            name: libraryForm.name,
-            description: libraryForm.description,
+            name: libraryForm.name.trim(),
+            description: libraryForm.description.trim(),
             user_id: user.id
           }
         ])
