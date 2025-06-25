@@ -33,6 +33,26 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
     m_phone: ''
   });
 
+  const getNextMemberCode = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('member_management')
+        .select('m_code')
+        .eq('library_id', libraryId)
+        .order('m_code', { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+      
+      // Start from 1001 if no members exist, otherwise increment the highest code
+      const nextCode = data && data.length > 0 ? data[0].m_code + 1 : 1001;
+      return nextCode;
+    } catch (error) {
+      console.error('Error getting next member code:', error);
+      return 1001; // Fallback to 1001 if error occurs
+    }
+  };
+
   useEffect(() => {
     loadMembers();
   }, [libraryId]);
@@ -64,9 +84,39 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
     });
   };
 
+  const formatPhoneInput = (value: string) => {
+    // Remove all non-digits
+    const numbers = value.replace(/\D/g, '');
+    
+    // Format the number as (XXX) XXX-XXXX
+    if (numbers.length <= 3) return numbers;
+    if (numbers.length <= 6) return `(${numbers.slice(0, 3)}) ${numbers.slice(3)}`;
+    return `(${numbers.slice(0, 3)}) ${numbers.slice(3, 6)}-${numbers.slice(6, 10)}`;
+  };
+
+  const validateAndFormatPhone = (phone: string): bigint | null => {
+    // Remove all non-digits
+    const rawNumber = phone.replace(/\D/g, '');
+    
+    // Validate length
+    if (rawNumber.length !== 10) {
+      return null;
+    }
+
+    // Convert to bigint
+    return BigInt(rawNumber);
+  };
+
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate phone number
+    const phoneNumber = validateAndFormatPhone(memberForm.m_phone);
+    if (phoneNumber === null) {
+      alert('Please enter a valid 10-digit phone number.');
+      return;
+    }
+
     try {
       // Check if member code already exists
       const { data: existingMember } = await supabase
@@ -77,17 +127,17 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
         .single();
 
       if (existingMember) {
-        alert('A member with this code already exists!');
+        alert('A member with this code already exists! Please use a different code.');
         return;
       }
-
+      
       const { data, error } = await supabase
         .from('member_management')
         .insert([
           {
             m_code: parseInt(memberForm.m_code),
             m_name: memberForm.m_name,
-            m_phone: memberForm.m_phone,
+            m_phone: phoneNumber.toString(),
             library_id: libraryId
           }
         ])
@@ -111,6 +161,13 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
     
     if (!editingMember) return;
 
+    // Validate phone number
+    const phoneNumber = validateAndFormatPhone(memberForm.m_phone);
+    if (phoneNumber === null) {
+      alert('Please enter a valid 10-digit phone number.');
+      return;
+    }
+
     try {
       // Check if member code already exists (excluding current member)
       if (parseInt(memberForm.m_code) !== editingMember.m_code) {
@@ -133,7 +190,7 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
         .update({
           m_code: parseInt(memberForm.m_code),
           m_name: memberForm.m_name,
-          m_phone: memberForm.m_phone
+          m_phone: phoneNumber.toString() // Store as string to preserve full number
         })
         .eq('id', editingMember.id)
         .select()
@@ -216,12 +273,25 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
   });
 
   const formatPhoneNumber = (phone: string) => {
-    // Simple phone formatting (adjust based on your needs)
+    // Simple phone formatting 
     if (phone.length === 10) {
       return `(${phone.slice(0, 3)}) ${phone.slice(3, 6)}-${phone.slice(6)}`;
     }
     return phone;
   };
+
+  // Add this effect to handle modal open/close
+  useEffect(() => {
+    if (showAddModal) {
+      // Get and set the next member code when the modal opens
+      getNextMemberCode().then(nextCode => {
+        setMemberForm(prev => ({ ...prev, m_code: nextCode.toString() }));
+      });
+    } else {
+      // Reset form when modal closes
+      resetForm();
+    }
+  }, [showAddModal]);
 
   if (loading) {
     return (
@@ -374,14 +444,22 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
               <form onSubmit={handleAddMember} className="space-y-4">
                 <div>
                   <label className="block text-white text-sm font-medium mb-2">Member Code</label>
-                  <input
-                    type="number"
-                    value={memberForm.m_code}
-                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_code: e.target.value }))}
-                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                    placeholder="e.g., 1001"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={memberForm.m_code}
+                      onChange={(e) => setMemberForm(prev => ({ ...prev, m_code: e.target.value }))}
+                      className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                      placeholder="Enter member code"
+                      required
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <p className="mt-1 text-sm text-text-secondary">Suggested code is pre-filled, but you can modify it</p>
                 </div>
 
                 <div>
@@ -398,14 +476,23 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
 
                 <div>
                   <label className="block text-white text-sm font-medium mb-2">Phone Number</label>
-                  <input
-                    type="tel"
-                    value={memberForm.m_phone}
-                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_phone: e.target.value.replace(/\D/g, '') }))}
-                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                    placeholder="e.g., 1234567890"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type="tel"
+                      value={memberForm.m_phone}
+                      onChange={(e) => setMemberForm(prev => ({ ...prev, m_phone: formatPhoneInput(e.target.value) }))}
+                      className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                      placeholder="(XXX) XXX-XXXX"
+                      maxLength={14}
+                      required
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <p className="mt-1 text-sm text-text-secondary">Enter a 10-digit phone number</p>
                 </div>
 
                 <div className="flex space-x-3 pt-4">
@@ -456,13 +543,20 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
               <form onSubmit={handleEditMember} className="space-y-4">
                 <div>
                   <label className="block text-white text-sm font-medium mb-2">Member Code</label>
-                  <input
-                    type="number"
-                    value={memberForm.m_code}
-                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_code: e.target.value }))}
-                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={memberForm.m_code}
+                      onChange={(e) => setMemberForm(prev => ({ ...prev, m_code: e.target.value }))}
+                      className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                      required
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
 
                 <div>
@@ -478,13 +572,23 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
 
                 <div>
                   <label className="block text-white text-sm font-medium mb-2">Phone Number</label>
-                  <input
-                    type="tel"
-                    value={memberForm.m_phone}
-                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_phone: e.target.value.replace(/\D/g, '') }))}
-                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type="tel"
+                      value={memberForm.m_phone}
+                      onChange={(e) => setMemberForm(prev => ({ ...prev, m_phone: formatPhoneInput(e.target.value) }))}
+                      className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                      placeholder="(XXX) XXX-XXXX"
+                      maxLength={14}
+                      required
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <p className="mt-1 text-sm text-text-secondary">Enter a 10-digit phone number</p>
                 </div>
 
                 <div className="flex space-x-3 pt-4">
