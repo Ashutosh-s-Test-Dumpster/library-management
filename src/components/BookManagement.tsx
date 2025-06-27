@@ -66,12 +66,6 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
         setShowAddModal(true);
         return;
       }
-
-      // Ctrl/Cmd + N
-      if ((e.key === 'n' || e.key === 'N') && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        setShowAddModal(true);
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
