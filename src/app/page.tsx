@@ -80,7 +80,8 @@ export default function Home() {
       description: "Add, search, update, and delete books from your library collection. Complete book inventory control with advanced search capabilities and detailed book information management.",
       icon: "📚",
       highlight: true,
-      features: ["Add new books", "Advanced search & filter", "Update book details", "Remove books", "ISBN lookup", "Category management"]
+      features: ["Add new books", "Advanced search & filter", "Update book details", "Remove books", "ISBN lookup", "Category management"],
+      link: "https://www.notion.so/For-Users-207ecc0d8b28803d9b2fceda3d5b1330?source=copy_link#207ecc0d8b28801b920ed37d394d02bc"
     },
     { 
       id: "members",
@@ -88,7 +89,8 @@ export default function Home() {
       description: "Manage library members with comprehensive member profiles and contact information. Track member activity and manage memberships efficiently.",
       icon: "👥",
       highlight: true,
-      features: ["Add members", "Update profiles", "Search members", "Member database", "Activity tracking", "Membership management"]
+      features: ["Add members", "Update profiles", "Search members", "Member database", "Activity tracking", "Membership management"],
+      link: "https://www.notion.so/For-Users-207ecc0d8b28803d9b2fceda3d5b1330?source=copy_link#207ecc0d8b2880568cc9cfa577b748db"
     },
     { 
       id: "issues",
@@ -96,7 +98,8 @@ export default function Home() {
       description: "Track book lending with issue and return management. Monitor current book status and due dates with automated notifications and fine management.",
       icon: "📋",
       highlight: true,
-      features: ["Issue books", "Process returns", "Track due dates", "Book status", "Fine management", "Automated notifications"]
+      features: ["Issue books", "Process returns", "Track due dates", "Book status", "Fine management", "Automated notifications"],
+      link: "https://www.notion.so/For-Users-207ecc0d8b28803d9b2fceda3d5b1330?source=copy_link#207ecc0d8b2880fab356cab62b9f6e27"
     },
   ];
 
@@ -179,13 +182,16 @@ export default function Home() {
             </div>
             
             <div className="text-center mt-4">
-              <button className={`px-6 py-2 rounded-lg font-sans transition-colors ${
-                feature.highlight 
-                  ? 'bg-gold text-black hover:bg-yellow-200' 
-                  : 'bg-white text-black hover:bg-gray-200'
-              }`}>
+              <Link 
+                href={feature.link}
+                className={`px-6 py-2 rounded-lg font-sans transition-colors ${
+                  feature.highlight 
+                    ? 'bg-gold text-black hover:bg-yellow-200' 
+                    : 'bg-white text-black hover:bg-gray-200'
+                }`}
+              >
                 Explore {feature.title}
-              </button>
+              </Link>
             </div>
           </div>
         </section>
@@ -275,7 +281,7 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex items-center">
-                <Link href="#" className={`text-text-secondary hover:text-gold transition-colors font-sans text-sm nav-link ${isAtBottom ? 'expanded' : ''}`}>Documentation</Link>
+                <Link href="https://capable-twist-8f4.notion.site/Bibliotheque-Library-Management-207ecc0d8b2880e1a6efde72da0c0cc8" className={`text-text-secondary hover:text-gold transition-colors font-sans text-sm nav-link ${isAtBottom ? 'expanded' : ''}`}>Documentation</Link>
               </div>
             </div>
           </div>

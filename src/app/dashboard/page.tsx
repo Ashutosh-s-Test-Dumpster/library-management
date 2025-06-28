@@ -1109,7 +1109,7 @@ export default function Dashboard() {
                 </p>
               </div>
               <div className="flex items-center">
-                <Link href="#" className="text-text-secondary hover:text-gold transition-colors font-sans text-sm nav-link">Documentation</Link>
+                <Link href="https://capable-twist-8f4.notion.site/Bibliotheque-Library-Management-207ecc0d8b2880e1a6efde72da0c0cc8" className="text-text-secondary hover:text-gold transition-colors font-sans text-sm nav-link">Documentation</Link>
               </div>
             </div>
           </div>
