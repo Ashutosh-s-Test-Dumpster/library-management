@@ -1,27 +1,22 @@
 import type { Metadata } from "next";
-import { Crimson_Text, Playfair_Display, Inter } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-
-const crimsonText = Crimson_Text({
-  variable: "--font-crimson",
-  subsets: ["latin"],
-  weight: ["400", "600", "700"],
-});
-
-const playfairDisplay = Playfair_Display({
-  variable: "--font-playfair",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
 
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Bibliotheque - The Library Management System",
-  description: "Manage your library with ease",
+  title: "Bibliotheque - Library Management System",
+  description: "Library management platform",
 };
 
 export default function RootLayout({
@@ -32,7 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${crimsonText.variable} ${playfairDisplay.variable} ${inter.variable} antialiased`}
+        className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
       >
         {children}
       </body>

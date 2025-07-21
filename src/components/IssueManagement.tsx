@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Portal from '@/components/Portal';
+import type { IssueTab } from '@/types';
 
 interface Issue {
   id: number;
@@ -60,40 +61,10 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
   const [filterBy, setFilterBy] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    loadData();
-  }, [libraryId]);
-
-  // Add keyboard shortcut handler
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if we're in an input field or any modal is open
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        showIssueModal ||
-        showBookSearchModal ||
-        showMemberSearchModal
-      ) {
-        return;
-      }
-
-      // Open issue modal with 'a' key
-      if (e.key === 'a' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        setShowIssueModal(true);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showIssueModal, showBookSearchModal, showMemberSearchModal]);
-
   const loadData = async () => {
     try {
       setLoading(true);
       
-      // Load issues with related book and member data
       const { data: issuesData, error: issuesError } = await supabase
         .from('issue_management')
         .select('*')
@@ -102,7 +73,6 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
 
       if (issuesError) throw issuesError;
 
-      // Load books
       const { data: booksData, error: booksError } = await supabase
         .from('book_management')
         .select('*')
@@ -110,7 +80,6 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
 
       if (booksError) throw booksError;
 
-      // Load members
       const { data: membersData, error: membersError } = await supabase
         .from('member_management')
         .select('*')
@@ -121,11 +90,10 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
       setBooks(booksData || []);
       setMembers(membersData || []);
 
-      // Combine issues with book and member details
-      const issuesWithDetails = (issuesData || []).map(issue => ({
+      const issuesWithDetails = (issuesData || []).map((issue: Issue) => ({
         ...issue,
-        book: booksData?.find(book => book.b_code === issue.ib_code),
-        member: membersData?.find(member => member.m_code === issue.im_code)
+        book: booksData?.find((book: Book) => book.b_code === issue.ib_code),
+        member: membersData?.find((member: Member) => member.m_code === issue.im_code)
       }));
 
       setIssues(issuesWithDetails);
@@ -136,6 +104,31 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadData();
+  }, [libraryId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        showIssueModal ||
+        showBookSearchModal ||
+        showMemberSearchModal
+      ) {
+        return;
+      }
+      if (e.key === 'a' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setShowIssueModal(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showIssueModal, showBookSearchModal, showMemberSearchModal]);
 
   const resetForm = () => {
     setIssueForm({
@@ -149,21 +142,18 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
     e.preventDefault();
     
     try {
-      // Check if book exists
       const book = books.find(b => b.b_code === parseInt(issueForm.book_code));
       if (!book) {
         alert('Book with this code does not exist!');
         return;
       }
 
-      // Check if member exists
       const member = members.find(m => m.m_code === parseInt(issueForm.member_code));
       if (!member) {
         alert('Member with this code does not exist!');
         return;
       }
 
-      // Check if book is already issued
       const existingIssue = issues.find(
         issue => issue.ib_code === parseInt(issueForm.book_code) && !issue.i_date_of_ret
       );
@@ -174,20 +164,17 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
 
       const { data, error } = await supabase
         .from('issue_management')
-        .insert([
-          {
-            ib_code: parseInt(issueForm.book_code),
-            im_code: parseInt(issueForm.member_code),
-            i_date_of_iss: issueForm.issue_date,
-            library_id: libraryId
-          }
-        ])
+        .insert([{
+          ib_code: parseInt(issueForm.book_code),
+          im_code: parseInt(issueForm.member_code),
+          i_date_of_iss: issueForm.issue_date,
+          library_id: libraryId
+        }])
         .select()
         .single();
 
       if (error) throw error;
 
-      // Add the new issue with details to the list
       const newIssueWithDetails = {
         ...data,
         book,
@@ -198,52 +185,82 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
       setShowIssueModal(false);
       resetForm();
       alert('Book issued successfully!');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error issuing book:', error);
-      alert(`Failed to issue book: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to issue book';
+      alert(`Failed to issue book: ${errorMessage}`);
     }
   };
 
   const handleReturnBook = async (issue: IssueWithDetails) => {
-    if (!confirm(`Are you sure you want to return "${issue.book?.b_name}" from ${issue.member?.m_name}?`)) {
+    if (!confirm(`Process return of "${issue.book?.b_name}" borrowed by ${issue.member?.m_name}?`)) {
       return;
     }
 
     try {
       const returnDate = new Date().toISOString().split('T')[0];
       
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('issue_management')
         .update({ i_date_of_ret: returnDate })
-        .eq('id', issue.id)
-        .select()
-        .single();
+        .eq('id', issue.id);
 
       if (error) throw error;
 
-      // Update the issue in the list
       setIssues(prev => prev.map(i => 
         i.id === issue.id 
           ? { ...i, i_date_of_ret: returnDate }
           : i
       ));
 
-      alert('Book returned successfully!');
-    } catch (error: any) {
+      alert('Return processed successfully!');
+    } catch (error) {
       console.error('Error returning book:', error);
-      alert(`Failed to return book: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process return';
+      alert(`Failed to process return: ${errorMessage}`);
     }
   };
 
   const getFilteredIssues = () => {
+    let filtered = issues;
+    
+    // Filter by tab
     switch (activeTab) {
       case 'active':
-        return issues.filter(issue => !issue.i_date_of_ret);
+        filtered = filtered.filter(issue => !issue.i_date_of_ret);
+        break;
       case 'returned':
-        return issues.filter(issue => issue.i_date_of_ret);
+        filtered = filtered.filter(issue => issue.i_date_of_ret);
+        break;
       default:
-        return issues;
+        break;
     }
+    
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(issue => {
+        switch (filterBy) {
+          case 'book':
+            return issue.ib_code.toString().includes(searchTerm);
+          case 'member':
+            return issue.im_code.toString().includes(searchTerm);
+          case 'status':
+            const status = issue.i_date_of_ret ? 'returned' : 'active';
+            return status.toLowerCase().includes(searchTerm.toLowerCase());
+          default:
+            return (
+              issue.ib_code.toString().includes(searchTerm) ||
+              issue.im_code.toString().includes(searchTerm) ||
+              issue.book?.b_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              issue.book?.b_author.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              issue.member?.m_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              issue.member?.m_phone.includes(searchTerm)
+            );
+        }
+      });
+    }
+    
+    return filtered;
   };
 
   const getAvailableBooks = () => {
@@ -291,302 +308,367 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
     const issued = new Date(issueDate);
     const diffTime = today.getTime() - issued.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays - 14; // Assuming 14 days is the lending period
+    return diffDays - 14;
   };
-
-  if (loading) {
-    return (
-      <div className="text-center py-12">
-        <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-text-secondary">Loading issues...</p>
-      </div>
-    );
-  }
 
   const filteredIssues = getFilteredIssues();
   const availableBooks = getAvailableBooks();
 
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="loading-spinner mx-auto mb-4"></div>
+        <p className="text-text-secondary font-sans text-sm">Loading issues...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Header with Tabs and Issue Button */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-        <h3 className="text-2xl font-bold text-white">Issue Management</h3>
+    <div className="h-full flex flex-col">
+      {/* Top Bar */}
+      <div className="border-b-2 border-border-primary pb-3 md:pb-4 mb-4 md:mb-6">
+        {/* Row 1: Title - Mobile only */}
+        <div className="md:hidden mb-3">
+          <h3 className="text-lg font-bold text-text-primary uppercase tracking-wider" style={{ textShadow: '0 0 10px rgba(0, 255, 255, 0.3)' }}>ISSUES</h3>
+        </div>
         
-        <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-4 w-full md:w-auto">
-          {/* Search Controls */}
-          <div className="flex flex-col space-y-2">
-            <label className="text-text-secondary text-sm">Search issues by:</label>
-            <div className="flex space-x-0 group focus-within:ring-1 focus-within:ring-border/60 rounded-lg">
-              <div className="relative">
-                <select
-                  value={filterBy}
-                  onChange={(e) => setFilterBy(e.target.value as any)}
-                  className="h-full px-4 py-2 bg-black border border-r-0 border-green-800 rounded-l-lg text-white text-sm focus:outline-none group-hover:border-green-800 transition-colors"
-                >
-                  <option value="all">All Fields</option>
-                  <option value="book">Book Code</option>
-                  <option value="member">Member Code</option>
-                  <option value="status">Status</option>
-                </select>
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-text-secondary">
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
+        {/* Desktop: Single row layout */}
+        <div className="hidden md:flex items-center justify-between">
+          <h3 className="text-xl md:text-2xl font-bold text-text-primary uppercase tracking-wider" style={{ textShadow: '0 0 10px rgba(0, 255, 255, 0.3)' }}>ISSUES</h3>
+          <div className="flex items-center space-x-3">
+            <div className="flex space-x-0">
+              <select
+                value={filterBy}
+                onChange={(e) => setFilterBy(e.target.value)}
+                className="flat-select border-r-0 text-xs"
+              >
+                <option value="all">ALL</option>
+                <option value="book">BOOK CODE</option>
+                <option value="member">MEMBER CODE</option>
+                <option value="status">STATUS</option>
+              </select>
               
               <input
                 type="text"
-                placeholder="Search..."
+                placeholder="SEARCH..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="flex-1 px-4 py-2 bg-black border border-l-0 border-green-500 rounded-r-lg text-white placeholder-text-secondary focus:outline-none group-hover:border-green-500/60 transition-colors min-w-[200px]"
+                className="flat-input flex-1 min-w-[200px] border-l-0 text-xs"
               />
             </div>
+            
+            <button
+              onClick={() => setShowIssueModal(true)}
+              className="flat-button flat-button-primary text-xs px-4 py-2 whitespace-nowrap"
+            >
+              + ISSUE
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile: 3 rows layout */}
+        <div className="md:hidden space-y-3">
+          {/* Row 2: Search and Filter */}
+          <div className="flex space-x-0">
+            <select
+              value={filterBy}
+              onChange={(e) => setFilterBy(e.target.value)}
+              className="flat-select border-r-0 text-xs flex-shrink-0 min-w-[70px]"
+            >
+              <option value="all">ALL</option>
+              <option value="book">BOOK</option>
+              <option value="member">MEMBER</option>
+              <option value="status">STATUS</option>
+            </select>
+            
+            <input
+              type="text"
+              placeholder="SEARCH..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flat-input flex-1 border-l-0 text-xs min-w-0"
+            />
           </div>
           
+          {/* Row 3: Add Button */}
           <button
             onClick={() => setShowIssueModal(true)}
-            className="bg-gold text-black px-4 py-2 rounded-lg font-sans hover:bg-yellow-200 transition-colors whitespace-nowrap md:self-end"
+            className="flat-button flat-button-primary text-xs px-4 py-2 w-full"
           >
-            Issue Book
+            + ISSUE BOOK
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex justify-center">
-        <div className="enhanced-blur rounded-2xl p-2">
-          <div className="flex space-x-2">
-            {[
-              { key: 'active', label: 'Active Issues', count: issues.filter(i => !i.i_date_of_ret).length },
-              { key: 'returned', label: 'Returned', count: issues.filter(i => i.i_date_of_ret).length },
-              { key: 'all', label: 'All Issues', count: issues.length }
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key as any)}
-                className={`px-4 py-2 rounded-lg font-sans text-sm transition-all ${
-                  activeTab === tab.key
-                    ? 'bg-gold text-black'
-                    : 'text-text-secondary hover:text-white'
-                }`}
-              >
-                {tab.label} ({tab.count})
-              </button>
-            ))}
+      {/* Tabs - Horizontal */}
+      <div className="flex space-x-2 mb-4 md:mb-6 overflow-x-auto">
+        {[
+          { key: 'active', label: 'ACTIVE', count: issues.filter(i => !i.i_date_of_ret).length },
+          { key: 'returned', label: 'RETURNED', count: issues.filter(i => i.i_date_of_ret).length },
+          { key: 'all', label: 'ALL', count: issues.length }
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key as IssueTab)}
+            className={`px-3 md:px-4 py-1.5 md:py-2 font-mono text-[10px] md:text-xs uppercase tracking-wider transition-all border-2 whitespace-nowrap flex-shrink-0 ${
+              activeTab === tab.key
+                ? 'border-accent-primary text-accent-primary bg-bg-tertiary'
+                : 'border-border-primary text-text-secondary hover:text-text-primary hover:border-accent-primary/50'
+            }`}
+          >
+            {tab.label} ({tab.count})
+          </button>
+        ))}
+      </div>
+
+      {/* Stats Cards - Responsive Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4 md:mb-6">
+        <div className="flat-card p-3 md:p-6 stagger-item">
+          <div className="flex items-center justify-between mb-2 md:mb-4">
+            <span className="text-text-tertiary text-[10px] md:text-xs uppercase tracking-wider font-mono">ACTIVE</span>
+            <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-accent-warning"></div>
+          </div>
+          <div className="text-xl md:text-3xl font-bold text-accent-warning font-mono mb-0.5 md:mb-1">{issues.filter(i => !i.i_date_of_ret).length}</div>
+          <div className="text-text-secondary text-[10px] md:text-xs font-mono">ISSUES</div>
+        </div>
+        
+        <div className="flat-card p-3 md:p-6 stagger-item">
+          <div className="flex items-center justify-between mb-2 md:mb-4">
+            <span className="text-text-tertiary text-[10px] md:text-xs uppercase tracking-wider font-mono">RETURNED</span>
+            <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-accent-success"></div>
+          </div>
+          <div className="text-xl md:text-3xl font-bold text-accent-success font-mono mb-0.5 md:mb-1">{issues.filter(i => i.i_date_of_ret).length}</div>
+          <div className="text-text-secondary text-[10px] md:text-xs font-mono">COMPLETED</div>
+        </div>
+        
+        <div className="flat-card p-3 md:p-6 stagger-item">
+          <div className="flex items-center justify-between mb-2 md:mb-4">
+            <span className="text-text-tertiary text-[10px] md:text-xs uppercase tracking-wider font-mono">OVERDUE</span>
+            <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-accent-error"></div>
+          </div>
+          <div className="text-xl md:text-3xl font-bold text-accent-error font-mono mb-0.5 md:mb-1">
+            {issues.filter(i => !i.i_date_of_ret && getDaysOverdue(i.i_date_of_iss) > 0).length}
+          </div>
+          <div className="text-text-secondary text-[10px] md:text-xs font-mono">REQUIRED</div>
+        </div>
+        
+        <div className="flat-card p-3 md:p-6 stagger-item">
+          <div className="flex items-center justify-between mb-2 md:mb-4">
+            <span className="text-text-tertiary text-[10px] md:text-xs uppercase tracking-wider font-mono">TOTAL</span>
+            <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-accent-primary"></div>
+          </div>
+          <div className="text-xl md:text-3xl font-bold text-accent-primary font-mono mb-0.5 md:mb-1">{issues.length}</div>
+          <div className="text-text-secondary text-[10px] md:text-xs font-mono">ALL</div>
+        </div>
+      </div>
+
+      {/* Issues List - Scrollable */}
+      {filteredIssues.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 border-2 border-border-primary flex items-center justify-center mx-auto mb-4">
+              <span className="text-text-tertiary font-mono text-2xl">IS</span>
+            </div>
+            <p className="text-text-secondary font-sans text-xs md:text-sm">
+              {activeTab === 'active' 
+                ? "NO ACTIVE BOOK ISSUES. ISSUE YOUR FIRST BOOK TO GET STARTED."
+                : activeTab === 'returned'
+                ? "NO RETURNED BOOKS YET."
+                : "NO BOOK ISSUES YET. ISSUE YOUR FIRST BOOK TO GET STARTED."
+              }
+            </p>
           </div>
         </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="enhanced-blur rounded-xl p-4 text-center">
-          <div className="text-2xl mb-2">📚</div>
-          <h4 className="text-lg font-bold text-gold mb-1">{issues.filter(i => !i.i_date_of_ret).length}</h4>
-          <p className="text-text-secondary text-sm">Active Issues</p>
-        </div>
-        
-        <div className="enhanced-blur rounded-xl p-4 text-center">
-          <div className="text-2xl mb-2">✅</div>
-          <h4 className="text-lg font-bold text-green-400 mb-1">{issues.filter(i => i.i_date_of_ret).length}</h4>
-          <p className="text-text-secondary text-sm">Returned Books</p>
-        </div>
-        
-        <div className="enhanced-blur rounded-xl p-4 text-center">
-          <div className="text-2xl mb-2">⚠️</div>
-          <h4 className="text-lg font-bold text-red-400 mb-1">
-            {issues.filter(i => !i.i_date_of_ret && getDaysOverdue(i.i_date_of_iss) > 0).length}
-          </h4>
-          <p className="text-text-secondary text-sm">Overdue Books</p>
-        </div>
-      </div>
-
-      {/* Issues List */}
-      {filteredIssues.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-6xl mb-4">📋</div>
-          <p className="text-text-secondary">
-            {activeTab === 'active' 
-              ? "No active book issues. Issue your first book to get started."
-              : activeTab === 'returned'
-              ? "No returned books yet."
-              : "No book issues yet. Issue your first book to get started."
-            }
-          </p>
-        </div>
       ) : (
-        <div className="space-y-4">
-          {filteredIssues.map((issue) => {
+        <div className="flex-1 overflow-y-auto">
+          <div className="space-y-3">
+          {filteredIssues.map((issue, index) => {
             const isOverdue = !issue.i_date_of_ret && getDaysOverdue(issue.i_date_of_iss) > 0;
             const daysOverdue = getDaysOverdue(issue.i_date_of_iss);
             
             return (
-              <div key={issue.id} className={`enhanced-blur rounded-xl p-6 border ${
-                isOverdue ? 'border-red-500/50' : 'border-border'
-              }`}>
-                <div className="flex flex-col md:flex-row justify-between items-start space-y-4 md:space-y-0">
-                  <div className="flex-1 space-y-3">
+              <div 
+                key={issue.id} 
+                className={`flat-card p-4 md:p-6 stagger-item ${
+                  isOverdue ? 'border-accent-error' : ''
+                }`}
+                style={{ animationDelay: `${index * 0.05}s` }}
+              >
+                <div className="flex flex-col md:flex-row justify-between items-start space-y-3 md:space-y-0 md:space-x-4">
+                  <div className="flex-1 space-y-3 md:space-y-4 w-full">
                     {/* Book Info */}
-                    <div className="flex items-start space-x-4">
-                      <div className="bg-gold text-black px-3 py-1 rounded text-sm font-bold">
-                        Book #{issue.ib_code}
+                    <div className="flex items-start space-x-2 md:space-x-4">
+                      <div className={`flat-badge text-[10px] md:text-xs ${isOverdue ? 'flat-badge-error' : 'flat-badge-primary'}`}>
+                        BK #{issue.ib_code}
                       </div>
-                      <div>
-                        <h4 className="text-white font-semibold text-lg">
-                          {issue.book?.b_name || 'Unknown Book'}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-text-primary font-semibold text-sm md:text-lg truncate">
+                          {issue.book?.b_name || 'UNKNOWN BOOK'}
                         </h4>
-                        <p className="text-text-secondary text-sm">
-                          by {issue.book?.b_author || 'Unknown Author'}
+                        <p className="text-text-secondary text-[10px] md:text-sm font-mono truncate">
+                          by {issue.book?.b_author || 'UNKNOWN AUTHOR'}
                         </p>
                       </div>
                     </div>
 
                     {/* Member Info */}
-                    <div className="flex items-center space-x-4">
-                      <div className="bg-blue-600 text-white px-3 py-1 rounded text-sm font-bold">
-                        Member #{issue.im_code}
+                    <div className="flex items-center space-x-2 md:space-x-4">
+                      <div className="flat-badge flat-badge-success text-[10px] md:text-xs">
+                        MB #{issue.im_code}
                       </div>
-                      <div>
-                        <p className="text-white font-medium">
-                          {issue.member?.m_name || 'Unknown Member'}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-text-primary font-medium text-sm md:text-base truncate">
+                          {issue.member?.m_name || 'UNKNOWN MEMBER'}
                         </p>
-                        <p className="text-text-secondary text-sm">
-                          {issue.member?.m_phone || 'No phone'}
+                        <p className="text-text-secondary text-[10px] md:text-sm font-mono truncate">
+                          {issue.member?.m_phone || 'NO PHONE'}
                         </p>
                       </div>
                     </div>
 
                     {/* Dates */}
-                    <div className="flex flex-wrap gap-4 text-sm">
+                    <div className="flex flex-wrap gap-2 md:gap-4 text-xs md:text-sm">
                       <div className="flex items-center text-text-secondary">
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-3 h-3 md:w-4 md:h-4 mr-1.5 md:mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a4 4 0 118 0v4m-4 12v-6m-6 6V13a1 1 0 011-1h10a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1z" />
                         </svg>
-                        Issued: {new Date(issue.i_date_of_iss).toLocaleDateString()}
+                        <span className="font-mono">ISSUED: {new Date(issue.i_date_of_iss).toLocaleDateString()}</span>
                       </div>
                       
                       {issue.i_date_of_ret ? (
-                        <div className="flex items-center text-green-400">
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="flex items-center text-accent-success">
+                          <svg className="w-3 h-3 md:w-4 md:h-4 mr-1.5 md:mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          Returned: {new Date(issue.i_date_of_ret).toLocaleDateString()}
+                          <span className="font-mono">RETURNED: {new Date(issue.i_date_of_ret).toLocaleDateString()}</span>
                         </div>
                       ) : isOverdue ? (
-                        <div className="flex items-center text-red-400">
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="flex items-center text-accent-error">
+                          <svg className="w-3 h-3 md:w-4 md:h-4 mr-1.5 md:mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          Overdue by {daysOverdue} days
+                          <span className="font-mono">OVERDUE BY {daysOverdue} DAYS</span>
                         </div>
                       ) : (
-                        <div className="flex items-center text-gold">
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="flex items-center text-accent-warning">
+                          <svg className="w-3 h-3 md:w-4 md:h-4 mr-1.5 md:mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          Due: {new Date(new Date(issue.i_date_of_iss).getTime() + 14 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+                          <span className="font-mono">DUE: {new Date(new Date(issue.i_date_of_iss).getTime() + 14 * 24 * 60 * 60 * 1000).toLocaleDateString()}</span>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  {!issue.i_date_of_ret && (
-                    <div className="flex-shrink-0">
-                      <button
-                        onClick={() => handleReturnBook(issue)}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg font-sans hover:bg-green-700 transition-colors"
-                      >
-                        Return Book
-                      </button>
-                    </div>
-                  )}
+                   {/* Actions */}
+                   {!issue.i_date_of_ret && (
+                     <div className="flex-shrink-0 w-full md:w-auto">
+                       <button
+                         onClick={() => handleReturnBook(issue)}
+                         className="flat-button border-accent-success text-accent-success hover:bg-accent-success hover:text-bg-primary text-xs md:text-sm px-3 md:px-4 py-2 w-full md:w-auto"
+                       >
+                         PROCESS RETURN
+                       </button>
+                     </div>
+                   )}
                 </div>
               </div>
             );
           })}
+          </div>
         </div>
       )}
 
-      {/* Issue Book Modal */}
+      {/* Issue Book Modal - Centered */}
       {showIssueModal && (
         <Portal>
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div 
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+              className="absolute inset-0 bg-black/80 backdrop-blur-md modal-backdrop" 
               onClick={() => {
                 setShowIssueModal(false);
                 resetForm();
               }}
             ></div>
             
-            <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
+            <div className="relative w-full max-w-md flat-card border-2 border-border-accent p-8 overflow-y-auto max-h-[90vh] animate-rigid-pop-in">
+              <button
+                onClick={() => {
+                  setShowIssueModal(false);
+                  resetForm();
+                }}
+                className="absolute top-4 right-4 text-text-secondary hover:text-accent-error transition-colors w-8 h-8 flex items-center justify-center border border-border-primary hover:border-accent-error"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
               <div className="text-center mb-6">
-                <div className="w-12 h-12 bg-gold rounded-xl flex items-center justify-center mx-auto mb-4">
-                  <span className="text-black font-sans font-bold text-lg">📋</span>
+                <div className="w-16 h-16 border-2 border-accent-primary flex items-center justify-center mx-auto mb-4">
+                  <span className="text-accent-primary font-mono font-bold text-2xl">IS</span>
                 </div>
-                <h2 className="font-sans text-2xl font-bold text-white mb-2">Issue Book</h2>
+                <h2 className="text-2xl font-bold text-text-primary mb-2 uppercase tracking-wider">ISSUE BOOK</h2>
               </div>
 
               <form onSubmit={handleIssueBook} className="space-y-4">
                 <div>
-                  <label className="block text-white text-sm font-medium mb-2">Book</label>
+                  <label className="block text-text-primary text-sm font-medium mb-2 uppercase tracking-wider">BOOK</label>
                   <div className="flex space-x-2">
                     <input
                       type="text"
                       value={issueForm.book_code ? `#${issueForm.book_code} - ${books.find(b => b.b_code === parseInt(issueForm.book_code))?.b_name || ''}` : ''}
-                      className="flex-1 px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold cursor-pointer"
+                      className="flex-1 flat-input cursor-pointer"
                       readOnly
                       onClick={() => setShowBookSearchModal(true)}
-                      placeholder="Click to search for a book"
+                      placeholder="CLICK TO SEARCH FOR A BOOK"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowBookSearchModal(true)}
-                      className="px-4 py-3 bg-gold text-black rounded-lg hover:bg-yellow-200 transition-colors"
+                      className="flat-button flat-button-primary px-4"
                     >
-                      Search
+                      SEARCH
                     </button>
                   </div>
                   {availableBooks.length === 0 && (
-                    <p className="text-red-400 text-sm mt-1">No books available for issue</p>
+                    <p className="text-accent-error text-sm mt-1 font-mono">NO BOOKS AVAILABLE FOR ISSUE</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-white text-sm font-medium mb-2">Member</label>
+                  <label className="block text-text-primary text-sm font-medium mb-2 uppercase tracking-wider">MEMBER</label>
                   <div className="flex space-x-2">
                     <input
                       type="text"
                       value={issueForm.member_code ? `#${issueForm.member_code} - ${members.find(m => m.m_code === parseInt(issueForm.member_code))?.m_name || ''}` : ''}
-                      className="flex-1 px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold cursor-pointer"
+                      className="flex-1 flat-input cursor-pointer"
                       readOnly
                       onClick={() => setShowMemberSearchModal(true)}
-                      placeholder="Click to search for a member"
+                      placeholder="CLICK TO SEARCH FOR A MEMBER"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowMemberSearchModal(true)}
-                      className="px-4 py-3 bg-gold text-black rounded-lg hover:bg-yellow-200 transition-colors"
+                      className="flat-button flat-button-primary px-4"
                     >
-                      Search
+                      SEARCH
                     </button>
                   </div>
                   {members.length === 0 && (
-                    <p className="text-red-400 text-sm mt-1">No members available</p>
+                    <p className="text-accent-error text-sm mt-1 font-mono">NO MEMBERS AVAILABLE</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-white text-sm font-medium mb-2">Issue Date</label>
+                  <label className="block text-text-primary text-sm font-medium mb-2 uppercase tracking-wider">ISSUE DATE</label>
                   <input
                     type="date"
                     value={issueForm.issue_date}
                     onChange={(e) => setIssueForm(prev => ({ ...prev, issue_date: e.target.value }))}
-                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold"
+                    className="flat-input w-full"
                     required
                   />
                 </div>
@@ -598,16 +680,16 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
                       setShowIssueModal(false);
                       resetForm();
                     }}
-                    className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
+                    className="flex-1 flat-button py-3"
                   >
-                    Cancel
+                    CANCEL
                   </button>
                   <button
                     type="submit"
                     disabled={availableBooks.length === 0 || members.length === 0}
-                    className="flex-1 bg-gold text-black py-3 rounded-lg font-sans font-medium hover:bg-yellow-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 flat-button flat-button-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Issue Book
+                    ISSUE BOOK
                   </button>
                 </div>
               </form>
@@ -616,32 +698,32 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
         </Portal>
       )}
 
-      {/* Book Search Modal */}
+      {/* Book Search Modal - Centered */}
       {showBookSearchModal && (
         <Portal>
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <div 
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+              className="absolute inset-0 bg-black/80 backdrop-blur-md modal-backdrop" 
               onClick={() => setShowBookSearchModal(false)}
             ></div>
             
-            <div className="relative w-full max-w-2xl bg-card border border-border rounded-2xl p-8 shadow-2xl max-h-[80vh] flex flex-col">
-              <div className="text-center mb-6">
-                <h2 className="font-sans text-2xl font-bold text-white mb-4">Search Books</h2>
+            <div className="relative w-full max-w-lg flat-card border-2 border-border-accent p-8 overflow-y-auto max-h-[90vh] animate-rigid-pop-in flex flex-col">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-text-primary mb-4 uppercase tracking-wider">SEARCH BOOKS</h2>
                 <input
                   type="text"
                   value={bookSearchTerm}
                   onChange={(e) => setBookSearchTerm(e.target.value)}
-                  placeholder="Search by book name, author, or code..."
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold"
+                  placeholder="SEARCH BY BOOK NAME, AUTHOR, OR CODE..."
+                  className="flat-input w-full"
                   autoFocus
                 />
               </div>
 
               <div className="flex-1 overflow-y-auto">
                 {getFilteredAvailableBooks().length === 0 ? (
-                  <div className="text-center py-8 text-text-secondary">
-                    No books found matching your search
+                  <div className="text-center py-8 text-text-secondary font-mono">
+                    NO BOOKS FOUND MATCHING YOUR SEARCH
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -649,18 +731,18 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
                       <button
                         key={book.id}
                         onClick={() => handleBookSelect(book)}
-                        className="w-full text-left p-4 bg-black border border-border rounded-lg hover:border-gold transition-colors group"
+                        className="w-full text-left flat-card p-4 hover:border-accent-primary transition-colors"
                       >
                         <div className="flex items-start justify-between">
                           <div>
-                            <div className="text-white font-medium group-hover:text-gold transition-colors">
+                            <div className="text-text-primary font-medium mb-1">
                               {book.b_name}
                             </div>
-                            <div className="text-text-secondary text-sm">
+                            <div className="text-text-secondary text-sm font-mono">
                               by {book.b_author}
                             </div>
                           </div>
-                          <div className="bg-gold/10 text-gold px-2 py-1 rounded text-sm">
+                          <div className="flat-badge flat-badge-primary">
                             #{book.b_code}
                           </div>
                         </div>
@@ -674,32 +756,32 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
         </Portal>
       )}
 
-      {/* Member Search Modal */}
+      {/* Member Search Modal - Centered */}
       {showMemberSearchModal && (
         <Portal>
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <div 
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+              className="absolute inset-0 bg-black/80 backdrop-blur-md modal-backdrop" 
               onClick={() => setShowMemberSearchModal(false)}
             ></div>
             
-            <div className="relative w-full max-w-2xl bg-card border border-border rounded-2xl p-8 shadow-2xl max-h-[80vh] flex flex-col">
-              <div className="text-center mb-6">
-                <h2 className="font-sans text-2xl font-bold text-white mb-4">Search Members</h2>
+            <div className="relative w-full max-w-lg flat-card border-2 border-border-accent p-8 overflow-y-auto max-h-[90vh] animate-rigid-pop-in flex flex-col">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-text-primary mb-4 uppercase tracking-wider">SEARCH MEMBERS</h2>
                 <input
                   type="text"
                   value={memberSearchTerm}
                   onChange={(e) => setMemberSearchTerm(e.target.value)}
-                  placeholder="Search by member name, code, or phone..."
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white focus:outline-none focus:border-gold"
+                  placeholder="SEARCH BY MEMBER NAME, CODE, OR PHONE..."
+                  className="flat-input w-full"
                   autoFocus
                 />
               </div>
 
               <div className="flex-1 overflow-y-auto">
                 {getFilteredMembers().length === 0 ? (
-                  <div className="text-center py-8 text-text-secondary">
-                    No members found matching your search
+                  <div className="text-center py-8 text-text-secondary font-mono">
+                    NO MEMBERS FOUND MATCHING YOUR SEARCH
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -707,18 +789,18 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
                       <button
                         key={member.id}
                         onClick={() => handleMemberSelect(member)}
-                        className="w-full text-left p-4 bg-black border border-border rounded-lg hover:border-gold transition-colors group"
+                        className="w-full text-left flat-card p-4 hover:border-accent-primary transition-colors"
                       >
                         <div className="flex items-start justify-between">
                           <div>
-                            <div className="text-white font-medium group-hover:text-gold transition-colors">
+                            <div className="text-text-primary font-medium mb-1">
                               {member.m_name}
                             </div>
-                            <div className="text-text-secondary text-sm">
+                            <div className="text-text-secondary text-sm font-mono">
                               {member.m_phone}
                             </div>
                           </div>
-                          <div className="bg-gold/10 text-gold px-2 py-1 rounded text-sm">
+                          <div className="flat-badge flat-badge-primary">
                             #{member.m_code}
                           </div>
                         </div>
@@ -733,4 +815,4 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
       )}
     </div>
   );
-} 
+}

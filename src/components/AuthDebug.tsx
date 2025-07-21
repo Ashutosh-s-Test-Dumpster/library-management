@@ -3,10 +3,38 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
+const useMock = 
+  !process.env.NEXT_PUBLIC_SUPABASE_URL || 
+  !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+  process.env.NEXT_PUBLIC_MOCK_MODE === 'true'
+
+interface DebugInfo {
+  supabaseUrl: string;
+  supabaseKey: string;
+  connection: string;
+  session: string;
+}
+
 export default function AuthDebug() {
-  const [debugInfo, setDebugInfo] = useState<any>({});
+  const [debugInfo, setDebugInfo] = useState<DebugInfo>({
+    supabaseUrl: '',
+    supabaseKey: '',
+    connection: '',
+    session: '',
+  });
 
   useEffect(() => {
+    // Skip debug checks in mock mode
+    if (useMock) {
+      setDebugInfo({
+        supabaseUrl: 'Mock Mode',
+        supabaseKey: 'Mock Mode',
+        connection: 'Mock Mode',
+        session: 'Mock Mode',
+      });
+      return;
+    }
+
     const checkConfig = async () => {
       const debug = {
         supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Set' : 'Missing',
@@ -17,14 +45,15 @@ export default function AuthDebug() {
 
       try {
         // Test basic connection
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        const { error: sessionError } = await supabase.auth.getSession();
         debug.session = sessionError ? `Error: ${sessionError.message}` : 'OK';
         
         // Test database connection
-        const { data, error } = await supabase.from('profiles').select('count').limit(1);
+        const { error } = await supabase.from('profiles').select('count').limit(1);
         debug.connection = error ? `Error: ${error.message}` : 'OK';
-      } catch (err: any) {
-        debug.connection = `Error: ${err.message}`;
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        debug.connection = `Error: ${errorMessage}`;
       }
 
       setDebugInfo(debug);

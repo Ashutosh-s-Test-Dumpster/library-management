@@ -3,29 +3,20 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Portal from '@/components/Portal';
-
-interface Member {
-  id: number;
-  m_code: number;
-  m_name: string;
-  m_phone: string;
-  library_id: string;
-  created_at: string;
-  updated_at: string;
-}
+import type { MemberFilter, Member as MemberType } from '@/types';
 
 interface MemberManagementProps {
   libraryId: string;
 }
 
 export default function MemberManagement({ libraryId }: MemberManagementProps) {
-  const [members, setMembers] = useState<Member[]>([]);
+  const [members, setMembers] = useState<MemberType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [editingMember, setEditingMember] = useState<MemberType | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterBy, setFilterBy] = useState<'all' | 'name' | 'code'>('all');
+  const [filterBy, setFilterBy] = useState<MemberFilter>('all');
 
   const [memberForm, setMemberForm] = useState({
     m_code: '',
@@ -43,19 +34,13 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
         .limit(1);
 
       if (error) throw error;
-      
-      // Start from 1001 if no members exist, otherwise increment the highest code
       const nextCode = data && data.length > 0 ? data[0].m_code + 1 : 1001;
       return nextCode;
     } catch (error) {
       console.error('Error getting next member code:', error);
-      return 1001; // Fallback to 1001 if error occurs
+      return 1001;
     }
   };
-
-  useEffect(() => {
-    loadMembers();
-  }, [libraryId]);
 
   const loadMembers = async () => {
     try {
@@ -76,6 +61,40 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
     }
   };
 
+  useEffect(() => {
+    loadMembers();
+  }, [libraryId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (showAddModal) {
+      getNextMemberCode().then(nextCode => {
+        setMemberForm(prev => ({ ...prev, m_code: nextCode.toString() }));
+      });
+    } else {
+      resetForm();
+    }
+  }, [showAddModal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        showAddModal ||
+        showEditModal
+      ) {
+        return;
+      }
+      if (e.key === 'a' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setShowAddModal(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAddModal, showEditModal]);
+
   const resetForm = () => {
     setMemberForm({
       m_code: '',
@@ -85,32 +104,21 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
   };
 
   const formatPhoneInput = (value: string) => {
-    // Remove all non-digits
     const numbers = value.replace(/\D/g, '');
-    
-    // Format the number as (XXX) XXX-XXXX
     if (numbers.length <= 3) return numbers;
     if (numbers.length <= 6) return `(${numbers.slice(0, 3)}) ${numbers.slice(3)}`;
     return `(${numbers.slice(0, 3)}) ${numbers.slice(3, 6)}-${numbers.slice(6, 10)}`;
   };
 
   const validateAndFormatPhone = (phone: string): bigint | null => {
-    // Remove all non-digits
     const rawNumber = phone.replace(/\D/g, '');
-    
-    // Validate length
-    if (rawNumber.length !== 10) {
-      return null;
-    }
-
-    // Convert to bigint
+    if (rawNumber.length !== 10) return null;
     return BigInt(rawNumber);
   };
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate phone number
     const phoneNumber = validateAndFormatPhone(memberForm.m_phone);
     if (phoneNumber === null) {
       alert('Please enter a valid 10-digit phone number.');
@@ -118,7 +126,6 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
     }
 
     try {
-      // Check if member code already exists
       const { data: existingMember } = await supabase
         .from('member_management')
         .select('id')
@@ -127,20 +134,18 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
         .single();
 
       if (existingMember) {
-        alert('A member with this code already exists! Please use a different code.');
+        alert('A member with this code already exists!');
         return;
       }
       
       const { data, error } = await supabase
         .from('member_management')
-        .insert([
-          {
-            m_code: parseInt(memberForm.m_code),
-            m_name: memberForm.m_name,
-            m_phone: phoneNumber.toString(),
-            library_id: libraryId
-          }
-        ])
+        .insert([{
+          m_code: parseInt(memberForm.m_code),
+          m_name: memberForm.m_name,
+          m_phone: phoneNumber.toString(),
+          library_id: libraryId
+        }])
         .select()
         .single();
 
@@ -150,18 +155,17 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
       setShowAddModal(false);
       resetForm();
       alert('Member added successfully!');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error adding member:', error);
-      alert(`Failed to add member: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add member';
+      alert(`Failed to add member: ${errorMessage}`);
     }
   };
 
   const handleEditMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!editingMember) return;
 
-    // Validate phone number
     const phoneNumber = validateAndFormatPhone(memberForm.m_phone);
     if (phoneNumber === null) {
       alert('Please enter a valid 10-digit phone number.');
@@ -169,7 +173,6 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
     }
 
     try {
-      // Check if member code already exists (excluding current member)
       if (parseInt(memberForm.m_code) !== editingMember.m_code) {
         const { data: existingMember } = await supabase
           .from('member_management')
@@ -190,7 +193,7 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
         .update({
           m_code: parseInt(memberForm.m_code),
           m_name: memberForm.m_name,
-          m_phone: phoneNumber.toString() // Store as string to preserve full number
+          m_phone: phoneNumber.toString()
         })
         .eq('id', editingMember.id)
         .select()
@@ -206,19 +209,19 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
       setEditingMember(null);
       resetForm();
       alert('Member updated successfully!');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating member:', error);
-      alert(`Failed to update member: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update member';
+      alert(`Failed to update member: ${errorMessage}`);
     }
   };
 
-  const handleDeleteMember = async (member: Member) => {
+  const handleDeleteMember = async (member: MemberType) => {
     if (!confirm(`Are you sure you want to delete member "${member.m_name}"?`)) {
       return;
     }
 
     try {
-      // Check if member has active book issues
       const { data: issues } = await supabase
         .from('issue_management')
         .select('id')
@@ -240,13 +243,14 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
 
       setMembers(prev => prev.filter(m => m.id !== member.id));
       alert('Member deleted successfully!');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting member:', error);
-      alert(`Failed to delete member: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete member';
+      alert(`Failed to delete member: ${errorMessage}`);
     }
   };
 
-  const openEditModal = (member: Member) => {
+  const openEditModal = (member: MemberType) => {
     setEditingMember(member);
     setMemberForm({
       m_code: member.m_code.toString(),
@@ -273,129 +277,126 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
   });
 
   const formatPhoneNumber = (phone: string) => {
-    // Simple phone formatting 
     if (phone.length === 10) {
       return `(${phone.slice(0, 3)}) ${phone.slice(3, 6)}-${phone.slice(6)}`;
     }
     return phone;
   };
 
-  // Add this effect to handle modal open/close
-  useEffect(() => {
-    if (showAddModal) {
-      // Get and set the next member code when the modal opens
-      getNextMemberCode().then(nextCode => {
-        setMemberForm(prev => ({ ...prev, m_code: nextCode.toString() }));
-      });
-    } else {
-      // Reset form when modal closes
-      resetForm();
-    }
-  }, [showAddModal]);
-
-  // Add keyboard shortcut handler
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if we're in an input field or any modal is open
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        showAddModal ||
-        showEditModal
-      ) {
-        return;
-      }
-
-      // Open add modal with 'a' key
-      if (e.key === 'a' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        setShowAddModal(true);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showAddModal, showEditModal]);
-
   if (loading) {
     return (
       <div className="text-center py-12">
-        <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-text-secondary">Loading members...</p>
+        <div className="loading-spinner mx-auto mb-4"></div>
+        <p className="text-text-secondary font-sans text-sm">Loading members...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header with Search and Add Button */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-        <h3 className="text-2xl font-bold text-white">Member Management</h3>
+    <div className="h-full flex flex-col">
+      {/* Top Bar */}
+      <div className="border-b-2 border-border-primary pb-3 md:pb-4 mb-4 md:mb-6">
+        {/* Row 1: Title - Mobile only */}
+        <div className="md:hidden mb-3">
+          <h3 className="text-lg font-bold text-text-primary uppercase tracking-wider" style={{ textShadow: '0 0 10px rgba(0, 255, 255, 0.3)' }}>MEMBERS</h3>
+        </div>
         
-        <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-4 w-full md:w-auto">
-          {/* Search Controls */}
-          <div className="flex flex-col space-y-2">
-            <label className="text-text-secondary text-sm">Search members by:</label>
-            <div className="flex space-x-0 group focus-within:ring-1 focus-within:ring-border/60 rounded-lg">
-              <div className="relative">
-                <select
-                  value={filterBy}
-                  onChange={(e) => setFilterBy(e.target.value as any)}
-                  className="h-full px-4 py-2 bg-black border border-r-0 border-green-800 rounded-l-lg text-white text-sm focus:outline-none group-hover:border-green-800 transition-colors"
-                >
-                  <option value="all">All Fields</option>
-                  <option value="name">Member Name</option>
-                  <option value="code">Member Code</option>
-                </select>
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-text-secondary">
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
+        {/* Desktop: Single row layout */}
+        <div className="hidden md:flex items-center justify-between">
+          <h3 className="text-xl md:text-2xl font-bold text-text-primary uppercase tracking-wider" style={{ textShadow: '0 0 10px rgba(0, 255, 255, 0.3)' }}>MEMBERS</h3>
+          <div className="flex items-center space-x-3">
+            <div className="flex space-x-0">
+              <select
+                value={filterBy}
+                onChange={(e) => setFilterBy(e.target.value as MemberFilter)}
+                className="flat-select border-r-0 text-xs"
+              >
+                <option value="all">ALL</option>
+                <option value="name">NAME</option>
+                <option value="code">CODE</option>
+              </select>
               
               <input
                 type="text"
-                placeholder="Search..."
+                placeholder="SEARCH..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="flex-1 px-4 py-2 bg-black border border-l-0 border-green-500 rounded-r-lg text-white placeholder-text-secondary focus:outline-none group-hover:border-green-500/60 transition-colors min-w-[200px]"
+                className="flat-input flex-1 min-w-[200px] border-l-0 text-xs"
               />
             </div>
+            
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flat-button flat-button-primary text-xs px-4 py-2 whitespace-nowrap"
+            >
+              + ADD
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile: 3 rows layout */}
+        <div className="md:hidden space-y-3">
+          {/* Row 2: Search and Filter */}
+          <div className="flex space-x-0">
+            <select
+              value={filterBy}
+              onChange={(e) => setFilterBy(e.target.value as MemberFilter)}
+              className="flat-select border-r-0 text-xs"
+            >
+              <option value="all">ALL</option>
+              <option value="name">NAME</option>
+              <option value="code">CODE</option>
+            </select>
+            
+            <input
+              type="text"
+              placeholder="SEARCH..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flat-input flex-1 border-l-0 text-xs"
+            />
           </div>
           
+          {/* Row 3: Add Button */}
           <button
             onClick={() => setShowAddModal(true)}
-            className="bg-gold text-black px-4 py-2 rounded-lg font-sans hover:bg-yellow-200 transition-colors whitespace-nowrap md:self-end"
+            className="flat-button flat-button-primary text-xs px-4 py-2 w-full"
           >
-            Add Member
+            + ADD MEMBER
           </button>
         </div>
       </div>
 
-      {/* Members List */}
+      {/* Members - Asymmetric Grid */}
       {filteredMembers.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-6xl mb-4">👥</div>
-          <p className="text-text-secondary">
-            {members.length === 0 
-              ? "No members registered yet. Add your first member to get started."
-              : "No members match your search criteria."
-            }
-          </p>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 border-2 border-border-primary flex items-center justify-center mx-auto mb-4">
+              <span className="text-text-tertiary font-mono text-2xl">MB</span>
+            </div>
+            <p className="text-text-secondary font-sans text-xs md:text-sm">
+              {members.length === 0 
+                ? "NO MEMBERS REGISTERED YET. ADD YOUR FIRST MEMBER TO GET STARTED."
+                : "NO MEMBERS MATCH YOUR SEARCH CRITERIA."
+              }
+            </p>
+          </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredMembers.map((member) => (
-            <div key={member.id} className="enhanced-blur rounded-xl p-6 border border-border">
-              <div className="flex justify-between items-start mb-4">
-                <div className="bg-gold text-black px-2 py-1 rounded text-sm font-bold">
-                  #{member.m_code}
-                </div>
+        <div className="flex-1 overflow-y-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-max">
+            {filteredMembers.map((member, index) => (
+            <div 
+              key={member.id} 
+              className="flat-card p-4 md:p-6 stagger-item"
+              style={{ animationDelay: `${index * 0.05}s` }}
+            >
+              <div className="flex justify-between items-start mb-3 md:mb-4">
+                <div className="flat-badge flat-badge-primary text-[10px] md:text-xs">#{member.m_code}</div>
                 <div className="flex space-x-2">
                   <button
                     onClick={() => openEditModal(member)}
-                    className="text-blue-400 hover:text-blue-300 transition-colors"
+                    className="text-accent-primary hover:text-accent-secondary transition-colors w-6 h-6 flex items-center justify-center border border-border-primary hover:border-accent-primary"
                     title="Edit Member"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -404,7 +405,7 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
                   </button>
                   <button
                     onClick={() => handleDeleteMember(member)}
-                    className="text-red-400 hover:text-red-300 transition-colors"
+                    className="text-accent-error hover:text-accent-error/80 transition-colors w-6 h-6 flex items-center justify-center border border-border-primary hover:border-accent-error"
                     title="Delete Member"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -414,109 +415,102 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
                 </div>
               </div>
               
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-gold rounded-full flex items-center justify-center mr-3">
-                  <span className="text-black font-bold text-lg">
+              <div className="flex items-center mb-2 md:mb-3">
+                <div className="w-8 h-8 md:w-10 md:h-10 border-2 border-accent-secondary flex items-center justify-center mr-2 md:mr-3 flex-shrink-0">
+                  <span className="text-accent-secondary font-mono font-bold text-xs md:text-sm">
                     {member.m_name.charAt(0).toUpperCase()}
                   </span>
                 </div>
-                <div>
-                  <h4 className="text-white font-semibold text-lg">{member.m_name}</h4>
-                  <p className="text-text-secondary text-sm">Member #{member.m_code}</p>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-text-primary font-semibold text-sm md:text-base truncate">{member.m_name}</h4>
+                  <p className="text-text-secondary text-[10px] md:text-xs font-mono">#{member.m_code}</p>
                 </div>
               </div>
               
-              <div className="space-y-2">
-                <div className="flex items-center text-text-secondary text-sm">
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="space-y-1">
+                <div className="flex items-center text-text-secondary text-[10px] md:text-xs">
+                  <svg className="w-3 h-3 mr-1.5 md:mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21L8.11 10.95l3.93 3.94 1.565-2.109a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                   </svg>
-                  {formatPhoneNumber(member.m_phone)}
-                </div>
-                <div className="flex items-center text-text-secondary text-sm">
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a4 4 0 118 0v4m-4 12v-6m-6 6V13a1 1 0 011-1h10a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1z" />
-                  </svg>
-                  Member since {new Date(member.created_at).toLocaleDateString()}
+                  <span className="font-mono truncate">{formatPhoneNumber(member.m_phone)}</span>
                 </div>
               </div>
             </div>
           ))}
+          </div>
         </div>
       )}
 
-      {/* Add Member Modal */}
+      {/* Add Member Modal - Centered */}
       {showAddModal && (
         <Portal>
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div 
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+              className="absolute inset-0 bg-black/80 backdrop-blur-md modal-backdrop" 
               onClick={() => {
                 setShowAddModal(false);
                 resetForm();
               }}
             ></div>
             
-            <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
+            <div className="relative w-full max-w-md flat-card border-2 border-border-accent p-8 overflow-y-auto max-h-[90vh] animate-rigid-pop-in">
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  resetForm();
+                }}
+                className="absolute top-4 right-4 text-text-secondary hover:text-accent-error transition-colors w-8 h-8 flex items-center justify-center border border-border-primary hover:border-accent-error"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
               <div className="text-center mb-6">
-                <div className="w-12 h-12 bg-gold rounded-xl flex items-center justify-center mx-auto mb-4">
-                  <span className="text-black font-sans font-bold text-lg">👥</span>
+                <div className="w-16 h-16 border-2 border-accent-primary flex items-center justify-center mx-auto mb-4">
+                  <span className="text-accent-primary font-mono font-bold text-2xl">MB</span>
                 </div>
-                <h2 className="font-sans text-2xl font-bold text-white mb-2">Add New Member</h2>
+                <h2 className="text-2xl font-bold text-text-primary mb-2 uppercase tracking-wider">ADD NEW MEMBER</h2>
               </div>
 
               <form onSubmit={handleAddMember} className="space-y-4">
                 <div>
-                  <label className="block text-white text-sm font-medium mb-2">Member Code</label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={memberForm.m_code}
-                      onChange={(e) => setMemberForm(prev => ({ ...prev, m_code: e.target.value }))}
-                      className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                      placeholder="Enter member code"
-                      required
-                    />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <p className="mt-1 text-sm text-text-secondary">Suggested code is pre-filled, but you can modify it</p>
+                  <label className="block text-text-primary text-sm font-medium mb-2 uppercase tracking-wider">MEMBER CODE</label>
+                  <input
+                    type="number"
+                    value={memberForm.m_code}
+                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_code: e.target.value }))}
+                    className="flat-input w-full"
+                    placeholder="Enter member code"
+                    required
+                  />
+                  <p className="mt-1 text-sm text-text-tertiary font-mono">Suggested code is pre-filled</p>
                 </div>
 
                 <div>
-                  <label className="block text-white text-sm font-medium mb-2">Full Name</label>
+                  <label className="block text-text-primary text-sm font-medium mb-2 uppercase tracking-wider">FULL NAME</label>
                   <input
                     type="text"
                     value={memberForm.m_name}
                     onChange={(e) => setMemberForm(prev => ({ ...prev, m_name: e.target.value }))}
-                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    className="flat-input w-full"
                     placeholder="e.g., John Doe"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-white text-sm font-medium mb-2">Phone Number</label>
-                  <div className="relative">
-                    <input
-                      type="tel"
-                      value={memberForm.m_phone}
-                      onChange={(e) => setMemberForm(prev => ({ ...prev, m_phone: formatPhoneInput(e.target.value) }))}
-                      className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                      placeholder="(XXX) XXX-XXXX"
-                      maxLength={14}
-                      required
-                    />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <p className="mt-1 text-sm text-text-secondary">Enter a 10-digit phone number</p>
+                  <label className="block text-text-primary text-sm font-medium mb-2 uppercase tracking-wider">PHONE NUMBER</label>
+                  <input
+                    type="tel"
+                    value={memberForm.m_phone}
+                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_phone: formatPhoneInput(e.target.value) }))}
+                    className="flat-input w-full"
+                    placeholder="(XXX) XXX-XXXX"
+                    maxLength={14}
+                    required
+                  />
+                  <p className="mt-1 text-sm text-text-tertiary font-mono">Enter a 10-digit phone number</p>
                 </div>
 
                 <div className="flex space-x-3 pt-4">
@@ -526,15 +520,15 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
                       setShowAddModal(false);
                       resetForm();
                     }}
-                    className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
+                    className="flex-1 flat-button py-3"
                   >
-                    Cancel
+                    CANCEL
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 bg-gold text-black py-3 rounded-lg font-sans font-medium hover:bg-yellow-200 transition-colors"
+                    className="flex-1 flat-button flat-button-primary py-3"
                   >
-                    Add Member
+                    ADD MEMBER
                   </button>
                 </div>
               </form>
@@ -543,12 +537,12 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
         </Portal>
       )}
 
-      {/* Edit Member Modal */}
+      {/* Edit Member Modal - Centered */}
       {showEditModal && editingMember && (
         <Portal>
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div 
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+              className="absolute inset-0 bg-black/80 backdrop-blur-md modal-backdrop" 
               onClick={() => {
                 setShowEditModal(false);
                 setEditingMember(null);
@@ -556,63 +550,61 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
               }}
             ></div>
             
-            <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
+            <div className="relative w-full max-w-md flat-card border-2 border-border-accent p-8 overflow-y-auto max-h-[90vh] animate-rigid-pop-in">
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingMember(null);
+                  resetForm();
+                }}
+                className="absolute top-4 right-4 text-text-secondary hover:text-accent-error transition-colors w-8 h-8 flex items-center justify-center border border-border-primary hover:border-accent-error"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
               <div className="text-center mb-6">
-                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                  <span className="text-white font-sans font-bold text-lg">✏️</span>
+                <div className="w-16 h-16 border-2 border-accent-secondary flex items-center justify-center mx-auto mb-4">
+                  <span className="text-accent-secondary font-mono font-bold text-2xl">✎</span>
                 </div>
-                <h2 className="font-sans text-2xl font-bold text-white mb-2">Edit Member</h2>
+                <h2 className="text-2xl font-bold text-text-primary mb-2 uppercase tracking-wider">EDIT MEMBER</h2>
               </div>
 
               <form onSubmit={handleEditMember} className="space-y-4">
                 <div>
-                  <label className="block text-white text-sm font-medium mb-2">Member Code</label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={memberForm.m_code}
-                      onChange={(e) => setMemberForm(prev => ({ ...prev, m_code: e.target.value }))}
-                      className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                      required
-                    />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-white text-sm font-medium mb-2">Full Name</label>
+                  <label className="block text-text-primary text-sm font-medium mb-2 uppercase tracking-wider">MEMBER CODE</label>
                   <input
-                    type="text"
-                    value={memberForm.m_name}
-                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_name: e.target.value }))}
-                    className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
+                    type="number"
+                    value={memberForm.m_code}
+                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_code: e.target.value }))}
+                    className="flat-input w-full"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-white text-sm font-medium mb-2">Phone Number</label>
-                  <div className="relative">
-                    <input
-                      type="tel"
-                      value={memberForm.m_phone}
-                      onChange={(e) => setMemberForm(prev => ({ ...prev, m_phone: formatPhoneInput(e.target.value) }))}
-                      className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                      placeholder="(XXX) XXX-XXXX"
-                      maxLength={14}
-                      required
-                    />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <p className="mt-1 text-sm text-text-secondary">Enter a 10-digit phone number</p>
+                  <label className="block text-text-primary text-sm font-medium mb-2 uppercase tracking-wider">FULL NAME</label>
+                  <input
+                    type="text"
+                    value={memberForm.m_name}
+                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_name: e.target.value }))}
+                    className="flat-input w-full"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-text-primary text-sm font-medium mb-2 uppercase tracking-wider">PHONE NUMBER</label>
+                  <input
+                    type="tel"
+                    value={memberForm.m_phone}
+                    onChange={(e) => setMemberForm(prev => ({ ...prev, m_phone: formatPhoneInput(e.target.value) }))}
+                    className="flat-input w-full"
+                    placeholder="(XXX) XXX-XXXX"
+                    maxLength={14}
+                    required
+                  />
                 </div>
 
                 <div className="flex space-x-3 pt-4">
@@ -623,15 +615,15 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
                       setEditingMember(null);
                       resetForm();
                     }}
-                    className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
+                    className="flex-1 flat-button py-3"
                   >
-                    Cancel
+                    CANCEL
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-blue-700 transition-colors"
+                    className="flex-1 flat-button border-accent-secondary text-accent-secondary hover:bg-accent-secondary hover:text-bg-primary py-3"
                   >
-                    Update Member
+                    UPDATE MEMBER
                   </button>
                 </div>
               </form>
@@ -641,4 +633,4 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
       )}
     </div>
   );
-} 
+}

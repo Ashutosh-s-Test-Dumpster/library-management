@@ -6,6 +6,17 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
 
+  // Check if we should use mock mode
+  const useMock = 
+    !process.env.NEXT_PUBLIC_SUPABASE_URL || 
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+    process.env.NEXT_PUBLIC_MOCK_MODE === 'true'
+
+  if (useMock) {
+    // In mock mode, just redirect to dashboard
+    return NextResponse.redirect(`${requestUrl.origin}/dashboard`)
+  }
+
   if (code) {
     const cookieStore = await cookies()
     

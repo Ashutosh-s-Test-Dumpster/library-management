@@ -1,74 +1,34 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { useLibraryStats } from "@/hooks/useLibraryStats";
 import { supabase } from "@/lib/supabase";
+import type { Library, LibraryForm, UserProfile, DashboardTab } from "@/types";
+import { VALIDATION, DELETE_CONFIRMATION_TEXT } from "@/constants";
 import BookManagement from '@/components/BookManagement';
 import MemberManagement from '@/components/MemberManagement';
 import IssueManagement from '@/components/IssueManagement';
-
-// Library management types
-interface Library {
-  id: string;
-  name: string;
-  description: string;
-  created_at: string;
-  user_id: string;
-}
-
-interface Book {
-  id: number;
-  code: number;
-  name: string;
-  author: string;
-  price: number;
-  library_id: string;
-}
-
-interface Member {
-  id: number;
-  code: number;
-  name: string;
-  phone: string;
-  library_id: string;
-}
-
-interface Issue {
-  id: number;
-  book_code: number;
-  member_code: number;
-  issue_date: string;
-  return_date: string | null;
-  library_id: string;
-}
+import Sidebar from '@/components/dashboard/Sidebar';
+import BottomNav from '@/components/dashboard/BottomNav';
+import Header from '@/components/dashboard/Header';
+import OverviewTab from '@/components/dashboard/OverviewTab';
 
 export default function Dashboard() {
-  const [isAtTop, setIsAtTop] = useState(true);
-  const [isAtBottom, setIsAtBottom] = useState(false);
-  const [userProfile, setUserProfile] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [libraries, setLibraries] = useState<Library[]>([]);
   const [currentLibrary, setCurrentLibrary] = useState<Library | null>(null);
   const [showCreateLibrary, setShowCreateLibrary] = useState(false);
   const [showLibraryManager, setShowLibraryManager] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'books' | 'members' | 'issues'>('overview');
-  const [stats, setStats] = useState({
-    totalBooks: 0,
-    totalMembers: 0,
-    activeIssues: 0,
-    overdueBooks: 0
-  });
-  
-  // Library creation form
-  const [libraryForm, setLibraryForm] = useState({
+  const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
+  const [libraryForm, setLibraryForm] = useState<LibraryForm>({
     name: '',
     description: ''
   });
 
-  // Batch delete state
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [selectedLibraries, setSelectedLibraries] = useState<Set<string>>(new Set());
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
@@ -76,61 +36,36 @@ export default function Dashboard() {
 
   const { signOut, loading } = useAuth();
   const router = useRouter();
+  const { stats, recentData, refetch: refetchStats } = useLibraryStats(currentLibrary?.id || null);
 
   useEffect(() => {
-    const handleScroll = () => {
-      const scrollTop = window.scrollY;
-      const windowHeight = window.innerHeight;
-      const documentHeight = document.documentElement.scrollHeight;
-      
-      // Check if at top (with small threshold)
-      setIsAtTop(scrollTop <= 10);
-      
-      // Check if at bottom (with small threshold)
-      setIsAtBottom(scrollTop + windowHeight >= documentHeight - 10);
-    };
-
-    // Set initial state
-    handleScroll();
-    
-    // Add scroll listener
-    window.addEventListener('scroll', handleScroll);
-    
-    // Cleanup
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
-    // Verify authentication and get user profile
     const verifyAuthAndGetUser = async () => {
       try {
         setIsLoading(true);
-        
-        // Check if user is authenticated
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        if (sessionError) {
-          console.error('Session error:', sessionError);
+        if (sessionError || !session?.user) {
           router.push('/');
           return;
         }
 
-        if (!session || !session.user) {
-          console.log('No valid session found, redirecting to home');
-          router.push('/');
-          return;
-        }
-
-        // Session is valid, set authentication state
         setIsAuthenticated(true);
-        
-        // Get user profile data
         const user = session.user;
+        if (!user) {
+          router.push('/');
+          return;
+        }
+        
+        // Handle mock user format
+        const mockUser = user as import('@/types').SupabaseUser;
+        const userName = user.user_metadata?.full_name || (mockUser.full_name as string | undefined) || user.email || 'Mock User';
+        const userEmail = user.email || (mockUser.email as string | undefined) || 'mock@example.com';
+        
         setUserProfile({
-          name: user.user_metadata?.full_name || user.email,
-          email: user.email,
+          name: userName,
+          email: userEmail,
           avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture,
-          initials: (user.user_metadata?.full_name || user.email || '')
+          initials: (userName || 'MU')
             .split(' ')
             .map((n: string) => n[0])
             .join('')
@@ -138,14 +73,8 @@ export default function Dashboard() {
             .slice(0, 2)
         });
 
-        // Load user's libraries
-        await loadLibraries(user.id);
-
-        console.log('User authenticated successfully:', {
-          email: user.email,
-          name: user.user_metadata?.full_name
-        });
-        
+        const userId = user.id || (mockUser.id as string | undefined) || '';
+        await loadLibraries(userId);
       } catch (error) {
         console.error('Error verifying authentication:', error);
         router.push('/');
@@ -156,60 +85,31 @@ export default function Dashboard() {
 
     verifyAuthAndGetUser();
 
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state changed:', event, session?.user?.email);
-      
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: import('@/types').AuthChangeEvent, session: import('@/types').SupabaseSession | null) => {
       if (event === 'SIGNED_OUT' || !session) {
         router.push('/');
+      } else if (event === 'SIGNED_IN' && session) {
+        // Reload user data on sign in
+        verifyAuthAndGetUser();
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Listen for mock auth changes
+    const handleMockAuthChange = (e: CustomEvent) => {
+      if (e.detail.event === 'SIGNED_OUT') {
+        router.push('/');
+      } else if (e.detail.event === 'SIGNED_IN') {
+        verifyAuthAndGetUser();
+      }
+    };
+
+    window.addEventListener('mock-auth-change', handleMockAuthChange as EventListener);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('mock-auth-change', handleMockAuthChange as EventListener);
+    };
   }, [router]);
-
-  const loadStats = async (libraryId: string) => {
-    try {
-      // Load books count
-      const { count: booksCount } = await supabase
-        .from('book_management')
-        .select('*', { count: 'exact', head: true })
-        .eq('library_id', libraryId);
-
-      // Load members count
-      const { count: membersCount } = await supabase
-        .from('member_management')
-        .select('*', { count: 'exact', head: true })
-        .eq('library_id', libraryId);
-
-      // Load active issues count
-      const { count: activeIssuesCount } = await supabase
-        .from('issue_management')
-        .select('*', { count: 'exact', head: true })
-        .eq('library_id', libraryId)
-        .is('i_date_of_ret', null);
-
-      // Load overdue books count (assuming 14 days lending period)
-      const fourteenDaysAgo = new Date();
-      fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-
-      const { count: overdueCount } = await supabase
-        .from('issue_management')
-        .select('*', { count: 'exact', head: true })
-        .eq('library_id', libraryId)
-        .is('i_date_of_ret', null)
-        .lt('i_date_of_iss', fourteenDaysAgo.toISOString().split('T')[0]);
-
-      setStats({
-        totalBooks: booksCount || 0,
-        totalMembers: membersCount || 0,
-        activeIssues: activeIssuesCount || 0,
-        overdueBooks: overdueCount || 0
-      });
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
-  };
 
   const loadLibraries = async (userId: string) => {
     try {
@@ -224,8 +124,7 @@ export default function Dashboard() {
       setLibraries(data || []);
       if (data && data.length > 0) {
         setCurrentLibrary(data[0]);
-        // Load stats for the first library
-        await loadStats(data[0].id);
+        // Stats will load automatically via useLibraryStats hook
       }
     } catch (error) {
       console.error('Error loading libraries:', error);
@@ -234,94 +133,72 @@ export default function Dashboard() {
 
   const createLibrary = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!userProfile) return;
+
+    const trimmedName = libraryForm.name.trim();
+    const trimmedDescription = libraryForm.description.trim();
+
+    // Validation
+    if (!trimmedName) {
+      alert('Library name is required.');
+      return;
+    }
+
+    if (trimmedName.length < VALIDATION.LIBRARY_NAME_MIN_LENGTH) {
+      alert(`Library name must be at least ${VALIDATION.LIBRARY_NAME_MIN_LENGTH} characters long.`);
+      return;
+    }
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No authenticated user');
 
-      // Check for duplicate library name for this user (case-insensitive)
-      const { data: existingLib } = await supabase
+      // Check for duplicate names (case-insensitive)
+      const { data: existingLibs } = await supabase
         .from('libraries')
-        .select('id')
-        .eq('user_id', user.id)
-        .ilike('name', libraryForm.name.trim())
-        .single();
+        .select('id, name')
+        .eq('user_id', user.id);
 
-      if (existingLib) {
-        alert('You already have a library with this name. Please choose a different name.');
+      const duplicate = existingLibs?.find(
+        (lib: Library) => lib.name.toLowerCase() === trimmedName.toLowerCase()
+      );
+
+      if (duplicate) {
+        alert(`A library named "${duplicate.name}" already exists. Please choose a different name.`);
         return;
       }
 
       const { data, error } = await supabase
         .from('libraries')
-        .insert([
-          {
-            name: libraryForm.name.trim(),
-            description: libraryForm.description.trim(),
+        .insert([{
+          name: trimmedName,
+          description: trimmedDescription || null,
             user_id: user.id
-          }
-        ])
+        }])
         .select()
         .single();
 
       if (error) throw error;
 
-      // Update libraries list
       setLibraries(prev => [data, ...prev]);
       setCurrentLibrary(data);
       setShowCreateLibrary(false);
       setLibraryForm({ name: '', description: '' });
 
+      // Show success feedback
+      alert(`Library "${data.name}" created successfully!`);
     } catch (error) {
       console.error('Error creating library:', error);
-      alert('Failed to create library. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Please try again.';
+      alert(`Failed to create library: ${errorMessage}`);
     }
   };
 
-  const switchLibrary = async (library: Library) => {
+  const switchLibrary = (library: Library) => {
     setCurrentLibrary(library);
     setShowLibraryManager(false);
-    // Reset to overview tab when switching libraries
     setActiveTab('overview');
-    // Load stats for the new library
-    await loadStats(library.id);
-  };
-
-  const deleteLibrary = async (library: Library) => {
-    if (!confirm(`Are you sure you want to delete "${library.name}"? This will permanently delete all books, members, and issues in this library.`)) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('libraries')
-        .delete()
-        .eq('id', library.id);
-
-      if (error) throw error;
-
-      // Remove from libraries list
-      const updatedLibraries = libraries.filter(l => l.id !== library.id);
-      setLibraries(updatedLibraries);
-
-      // If we deleted the current library, switch to the first available one
-      if (currentLibrary?.id === library.id) {
-        if (updatedLibraries.length > 0) {
-          setCurrentLibrary(updatedLibraries[0]);
-          await loadStats(updatedLibraries[0].id);
-        } else {
-          setCurrentLibrary(null);
-        }
-      }
-
-      setShowLibraryManager(false);
-      alert('Library deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting library:', error);
-      alert('Failed to delete library. Please try again.');
-    }
+    // Stats will load automatically via useLibraryStats hook
   };
 
   const toggleDeleteMode = () => {
@@ -344,56 +221,109 @@ export default function Dashboard() {
       alert('Please select at least one library to delete.');
       return;
     }
+    
+    // Prevent deleting the currently active library if it's the only one
+    if (selectedLibraries.size === libraries.length && currentLibrary) {
+      alert('Cannot delete all libraries. You must have at least one library.');
+      return;
+    }
+    
     setShowDeleteConfirmation(true);
   };
 
   const confirmBatchDelete = async () => {
-    const selectedLibraryObjects = libraries.filter(lib => selectedLibraries.has(lib.id));
-    const expectedText = selectedLibraryObjects.map(lib => lib.name).join(', ');
-    
-    if (deleteConfirmationText !== expectedText) {
-      alert('Library names do not match. Please type the exact names.');
+    // Simplified confirmation - just type "DELETE"
+    if (deleteConfirmationText.trim().toUpperCase() !== DELETE_CONFIRMATION_TEXT) {
+      alert(`Please type "${DELETE_CONFIRMATION_TEXT}" to confirm.`);
       return;
     }
 
-    try {
-      // Delete all selected libraries
-      for (const libraryId of selectedLibraries) {
-        const { error } = await supabase
-          .from('libraries')
-          .delete()
-          .eq('id', libraryId);
+    const librariesToDelete = libraries.filter(lib => selectedLibraries.has(lib.id));
+    const deletedCount = selectedLibraries.size;
+    const deletedNames = librariesToDelete.map(lib => lib.name).join(', ');
 
-        if (error) throw error;
+    try {
+      // Delete libraries one by one
+      const deletePromises = Array.from(selectedLibraries).map(libraryId =>
+        supabase.from('libraries').delete().eq('id', libraryId)
+      );
+      
+      const results = await Promise.all(deletePromises);
+      const errors = results.filter(result => result.error);
+      
+      if (errors.length > 0) {
+        throw new Error(`Failed to delete ${errors.length} library/libraries`);
       }
 
-      // Update libraries list
       const remainingLibraries = libraries.filter(lib => !selectedLibraries.has(lib.id));
       setLibraries(remainingLibraries);
 
-      // If current library was deleted, switch to first remaining one
+      // Handle current library if it was deleted
       if (currentLibrary && selectedLibraries.has(currentLibrary.id)) {
         if (remainingLibraries.length > 0) {
           setCurrentLibrary(remainingLibraries[0]);
-          await loadStats(remainingLibraries[0].id);
+          // Stats will load automatically via useLibraryStats hook
         } else {
           setCurrentLibrary(null);
         }
       }
 
-      // Reset states
+      // Reset state
       setSelectedLibraries(new Set());
       setIsDeleteMode(false);
       setShowDeleteConfirmation(false);
       setDeleteConfirmationText('');
       setShowLibraryManager(false);
       
-      alert(`Successfully deleted ${selectedLibraries.size} libraries.`);
+      alert(`Successfully deleted ${deletedCount} ${deletedCount === 1 ? 'library' : 'libraries'}: ${deletedNames}`);
     } catch (error) {
       console.error('Error deleting libraries:', error);
-      alert('Failed to delete some libraries. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Please try again.';
+      alert(`Failed to delete libraries: ${errorMessage}`);
     }
   };
+
+  useEffect(() => {
+    if (!currentLibrary) return;
+
+    const tables = ['book_management', 'member_management', 'issue_management'];
+    const channels = tables.map((table) => {
+      return supabase
+        .channel(`${table}-changes-${currentLibrary.id}`)
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table,
+            filter: `library_id=eq.${currentLibrary.id}`
+        }, () => {
+          refetchStats();
+        })
+        .subscribe();
+    });
+
+    return () => {
+      channels.forEach((ch) => {
+        try {
+          supabase.removeChannel(ch);
+        } catch {
+          // Ignore errors when removing channels
+        }
+      });
+    };
+  }, [currentLibrary, refetchStats]);
+
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-bg-primary flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-2 border-accent-primary flex items-center justify-center mx-auto mb-4" style={{ boxShadow: '0 0 30px rgba(0, 255, 255, 0.5)' }}>
+            <div className="loading-spinner"></div>
+          </div>
+          <p className="text-text-secondary font-sans">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleSignOut = async () => {
     try {
@@ -406,715 +336,499 @@ export default function Dashboard() {
     }
   };
 
-  // Real-time updates for stats
-  useEffect(() => {
-    if (!currentLibrary) return;
-
-    // Tables to listen for changes
-    const tables = ['book_management', 'member_management', 'issue_management'];
-
-    const channels = tables.map((table) => {
-      return supabase
-        .channel(`${table}-changes-${currentLibrary.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table,
-            filter: `library_id=eq.${currentLibrary.id}`
-          },
-          () => {
-            // Reload stats on any change related to this library
-            loadStats(currentLibrary.id);
-          }
-        )
-        .subscribe();
-    });
-
-    // Cleanup
-    return () => {
-      channels.forEach((ch) => {
-        try {
-          supabase.removeChannel(ch);
-        } catch (_) {
-          /* ignore */
-        }
-      });
-    };
-  }, [currentLibrary]);
-
-  // Show loading state while verifying authentication
-  if (isLoading || !isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 bg-gold rounded-xl flex items-center justify-center mx-auto mb-4 animate-pulse">
-            <span className="text-black font-sans font-bold text-lg">B</span>
-          </div>
-          <p className="text-white font-sans">Verifying authentication...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-black relative">
-      {/* Fixed Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className={`enhanced-blur rounded-2xl px-6 py-4 sleek-shadow ${isAtTop ? 'expanded' : ''}`}>
-            <div className={`flex items-center justify-between nav-content ${isAtTop ? 'expanded' : ''}`}>
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gold rounded-lg flex items-center justify-center logo-container header-logo">
-                  <span className="text-black font-sans font-bold text-sm cursor-pointer">B</span>
-                </div>
-                <h1 className="font-sans font-bold text-xl text-white cursor-pointer">Bibliotheque</h1>
-                {currentLibrary && (
-                  <div className="flex items-center space-x-2">
-                    <span className="text-text-secondary font-sans text-sm">
-                      / {currentLibrary.name}
-                    </span>
-                    <div className="relative">
-                      <button
-                        onClick={() => setShowLibraryManager(!showLibraryManager)}
-                        className="w-6 h-6 bg-gold/20 border border-gold/30 rounded-lg flex items-center justify-center hover:bg-gold/30 transition-colors"
-                        title="Manage Libraries"
-                      >
-                        <span className="text-gold font-bold text-sm">+</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              {/* Mobile: Show Profile + Sign Out */}
-              <div className="md:hidden">
-                <div className="flex items-center space-x-3">
-                  {/* Profile Picture */}
-                  <div className={`w-8 h-8 rounded-full overflow-hidden border-2 border-gold/30 ${isAtTop ? 'expanded' : ''}`}>
-                    {userProfile?.avatar ? (
-                      <img 
-                        src={userProfile.avatar} 
-                        alt={userProfile.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          // Fallback to initials if image fails to load
-                          e.currentTarget.style.display = 'none';
-                          const parent = e.currentTarget.parentElement;
-                          if (parent) {
-                            parent.innerHTML = `<div class="w-full h-full bg-gold flex items-center justify-center text-black text-xs font-bold">${userProfile.initials}</div>`;
-                          }
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gold flex items-center justify-center text-black text-xs font-bold">
-                        {userProfile?.initials || 'U'}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <button 
-                    onClick={handleSignOut}
-                    disabled={loading}
-                    className={`bg-gold text-black px-4 py-2 rounded-lg font-sans hover:bg-yellow-200 transition-colors nav-button text-sm disabled:opacity-50 disabled:cursor-not-allowed ${isAtTop ? 'expanded' : ''}`}
-                  >
-                    {loading ? 'Signing Out...' : 'Sign Out'}
-                  </button>
-                </div>
-              </div>
-              
-              {/* Desktop: Show Profile + Sign Out */}
-              <div className="hidden md:flex items-center space-x-4">
-                {/* Profile Picture */}
-                <div className={`w-10 h-10 rounded-full overflow-hidden border-2 border-gold/30 ${isAtTop ? 'expanded' : ''}`}>
-                  {userProfile?.avatar ? (
-                    <img 
-                      src={userProfile.avatar} 
-                      alt={userProfile.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        // Fallback to initials if image fails to load
-                        e.currentTarget.style.display = 'none';
-                        const parent = e.currentTarget.parentElement;
-                        if (parent) {
-                          parent.innerHTML = `<div class="w-full h-full bg-gold flex items-center justify-center text-black text-sm font-bold">${userProfile.initials}</div>`;
-                        }
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gold flex items-center justify-center text-black text-sm font-bold">
-                      {userProfile?.initials || 'U'}
-                    </div>
-                  )}
-                </div>
-                
-                {/* User Name (optional, you can remove this if you want) */}
-                <div className="hidden lg:block">
-                  <p className="text-white text-sm font-medium">{userProfile?.name}</p>
-                  <p className="text-text-secondary text-xs">{userProfile?.email}</p>
-                </div>
-                
-                <button 
-                  onClick={handleSignOut}
-                  disabled={loading}
-                  className={`bg-gold text-black px-6 py-2 rounded-lg font-sans hover:bg-yellow-200 transition-colors nav-button disabled:opacity-50 disabled:cursor-not-allowed ${isAtTop ? 'expanded' : ''}`}
-                >
-                  {loading ? 'Signing Out...' : 'Sign Out'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-bg-primary relative flex flex-col md:flex-row">
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onLibraryManagerClick={() => setShowLibraryManager(true)}
+        userInitials={userProfile?.initials || 'U'}
+        userAvatar={userProfile?.avatar}
+      />
+
+      <BottomNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onLibraryManagerClick={() => setShowLibraryManager(true)}
+      />
+
+      <Header
+        currentLibrary={currentLibrary}
+        onSignOut={handleSignOut}
+        loading={loading}
+      />
 
       {/* Main Content Area */}
-      <main className="pt-44 md:pt-32 pb-32 px-6">
-        {/* No Libraries - Show Create Library */}
+      <main className="flex-1 mt-14 md:mt-16 md:ml-20 pb-16 md:pb-0">
         {libraries.length === 0 && (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="max-w-2xl text-center">
-              <p className="font-sans text-lg md:text-xl text-text-secondary leading-relaxed mb-10">
-                Start managing your library by creating your first library database. 
-                You can manage books, members, and track book issues all in one place.
+          <div className="flex items-center justify-center min-h-[calc(100vh-3.5rem)] md:min-h-[calc(100vh-4rem)] p-4 md:p-8">
+            <div className="max-w-md text-center">
+              <div className="w-16 h-16 md:w-24 md:h-24 border-2 border-accent-primary flex items-center justify-center mx-auto mb-4 md:mb-6" style={{ boxShadow: '0 0 30px rgba(0, 255, 255, 0.5)' }}>
+                <span className="text-accent-primary font-mono font-bold text-2xl md:text-4xl">+</span>
+              </div>
+              <p className="text-text-secondary text-sm md:text-base mb-6 md:mb-8 font-sans">
+                Create your first library to get started.
               </p>
               <button 
                 onClick={() => setShowCreateLibrary(true)}
-                className="bg-gold text-black px-8 py-4 rounded-lg font-sans text-lg hover:bg-yellow-200 transition-all inline-flex items-center space-x-2"
+                className="flat-button flat-button-primary px-6 md:px-8 py-3 md:py-4 text-sm md:text-base"
               >
-                <span className="text-2xl">+</span>
-                <span>Create Library</span>
+                CREATE LIBRARY
               </button>
             </div>
           </div>
         )}
 
-        {/* Has Libraries - Show Library Management */}
         {libraries.length > 0 && currentLibrary && (
-          <div className="max-w-6xl mx-auto">
-            {/* Library Header */}
-            <div className="text-center mb-8">
-              <h2 className="font-sans text-4xl md:text-5xl font-bold text-white leading-tight mb-4">
-                {currentLibrary.name}
-              </h2>
-              <p className="font-sans text-lg text-text-secondary max-w-2xl mx-auto">
-                {currentLibrary.description}
-              </p>
-            </div>
-
-            {/* Tab Navigation */}
-            <div className="flex justify-center mb-8">
-              <div className="enhanced-blur rounded-2xl p-2">
-                <div className="flex space-x-2">
-                  {[
-                    { key: 'overview', label: 'Overview', icon: '📊' },
-                    { key: 'books', label: 'Books', icon: '📚' },
-                    { key: 'members', label: 'Members', icon: '👥' },
-                    { key: 'issues', label: 'Issues', icon: '📋' }
-                  ].map((tab) => (
-                    <button
-                      key={tab.key}
-                      onClick={() => setActiveTab(tab.key as any)}
-                      className={`px-4 py-2 rounded-lg font-sans text-sm transition-all ${
-                        activeTab === tab.key
-                          ? 'bg-gold text-black'
-                          : 'text-text-secondary hover:text-white'
-                      }`}
-                    >
-                      <span className="mr-2">{tab.icon}</span>
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Tab Content */}
-            <div className="space-y-6">
-              {activeTab === 'overview' && (
-                <div className="space-y-6">
-                  {/* Quick Stats Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="enhanced-blur rounded-2xl p-6 text-center">
-                      <div className="text-4xl mb-3">📚</div>
-                      <h3 className="text-3xl font-bold text-gold mb-2">{stats.totalBooks}</h3>
-                      <p className="text-text-secondary">Total Books</p>
-                    </div>
-                    
-                    <div className="enhanced-blur rounded-2xl p-6 text-center">
-                      <div className="text-4xl mb-3">👥</div>
-                      <h3 className="text-3xl font-bold text-gold mb-2">{stats.totalMembers}</h3>
-                      <p className="text-text-secondary">Total Members</p>
-                    </div>
-                    
-                    <div className="enhanced-blur rounded-2xl p-6 text-center">
-                      <div className="text-4xl mb-3">📋</div>
-                      <h3 className="text-3xl font-bold text-blue-400 mb-2">{stats.activeIssues}</h3>
-                      <p className="text-text-secondary">Active Issues</p>
-                    </div>
-
-                    <div className="enhanced-blur rounded-2xl p-6 text-center">
-                      <div className="text-4xl mb-3">⚠️</div>
-                      <h3 className="text-3xl font-bold text-red-400 mb-2">{stats.overdueBooks}</h3>
-                      <p className="text-text-secondary">Overdue Books</p>
-                    </div>
-                  </div>
-
-                  {/* Quick Actions */}
-                  <div className="enhanced-blur rounded-2xl p-6">
-                    <h3 className="text-2xl font-bold text-white mb-6">Quick Actions</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <button
-                        onClick={() => setActiveTab('books')}
-                        className="p-6 bg-gold/10 border border-gold/20 rounded-xl hover:bg-gold/20 transition-colors"
-                      >
-                        <div className="text-4xl mb-3">📚</div>
-                        <h4 className="text-lg font-semibold text-white mb-2">Manage Books</h4>
-                        <p className="text-text-secondary text-sm">Add, edit, or remove books from your library</p>
-                      </button>
-
-                      <button
-                        onClick={() => setActiveTab('members')}
-                        className="p-6 bg-blue-500/10 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 transition-colors"
-                      >
-                        <div className="text-4xl mb-3">👥</div>
-                        <h4 className="text-lg font-semibold text-white mb-2">Manage Members</h4>
-                        <p className="text-text-secondary text-sm">Register and manage library members</p>
-                      </button>
-
-                      <button
-                        onClick={() => setActiveTab('issues')}
-                        className="p-6 bg-green-500/10 border border-green-500/20 rounded-xl hover:bg-green-500/20 transition-colors"
-                      >
-                        <div className="text-4xl mb-3">📋</div>
-                        <h4 className="text-lg font-semibold text-white mb-2">Issue & Return</h4>
-                        <p className="text-text-secondary text-sm">Issue books to members and track returns</p>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Recent Activity */}
-                  {stats.activeIssues > 0 && (
-                    <div className="enhanced-blur rounded-2xl p-6">
-                      <h3 className="text-2xl font-bold text-white mb-4">Library Overview</h3>
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center py-3 border-b border-border">
-                          <span className="text-text-secondary">Books in circulation</span>
-                          <span className="text-white font-semibold">{stats.activeIssues}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-3 border-b border-border">
-                          <span className="text-text-secondary">Available books</span>
-                          <span className="text-white font-semibold">{stats.totalBooks - stats.activeIssues}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-3">
-                          <span className="text-text-secondary">Library utilization</span>
-                          <span className="text-white font-semibold">
-                            {stats.totalBooks > 0 ? Math.round((stats.activeIssues / stats.totalBooks) * 100) : 0}%
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+          <div className="min-h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)]">
+            {/* Main Content */}
+            <div className={`h-full overflow-y-auto ${activeTab === 'overview' ? '' : 'p-3 md:p-6'}`}>
+              {activeTab === 'overview' && currentLibrary && (
+                <OverviewTab
+                  library={currentLibrary}
+                  stats={stats}
+                  recentData={recentData}
+                  onTabChange={setActiveTab}
+                />
               )}
 
               {activeTab === 'books' && (
-                <div className="enhanced-blur rounded-2xl p-6">
                   <BookManagement libraryId={currentLibrary.id} />
-                </div>
               )}
 
               {activeTab === 'members' && (
-                <div className="enhanced-blur rounded-2xl p-6">
                   <MemberManagement libraryId={currentLibrary.id} />
-                </div>
               )}
 
               {activeTab === 'issues' && (
-                <div className="enhanced-blur rounded-2xl p-6">
                   <IssueManagement libraryId={currentLibrary.id} />
-                </div>
               )}
             </div>
           </div>
         )}
       </main>
 
-      {/* Create Library Modal */}
+      {/* Create Library Modal - Centered */}
       {showCreateLibrary && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          {/* Backdrop */}
           <div 
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
-            onClick={() => setShowCreateLibrary(false)}
+            className="absolute inset-0 bg-black/80 backdrop-blur-md modal-backdrop" 
+            onClick={() => {
+              setShowCreateLibrary(false);
+              setLibraryForm({ name: '', description: '' });
+            }}
           ></div>
           
-          {/* Modal */}
-          <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-2xl">
+          <div className="relative w-full max-w-lg flat-card border-2 border-border-accent p-4 md:p-8 overflow-y-auto max-h-[90vh] animate-rigid-pop-in">
+            <button
+              onClick={() => {
+                setShowCreateLibrary(false);
+                setLibraryForm({ name: '', description: '' });
+              }}
+              className="absolute top-4 right-4 text-text-secondary hover:text-accent-error transition-colors w-8 h-8 flex items-center justify-center border border-border-primary hover:border-accent-error"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
             <div className="text-center mb-8">
-              <div className="w-12 h-12 bg-gold rounded-xl flex items-center justify-center mx-auto mb-4">
-                <span className="text-black font-sans font-bold text-lg">+</span>
+              <div className="w-20 h-20 border-2 border-accent-primary flex items-center justify-center mx-auto mb-4" style={{ boxShadow: '0 0 20px rgba(0, 255, 255, 0.3)' }}>
+                <svg className="w-10 h-10 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
               </div>
-              <h2 className="font-sans text-2xl font-bold text-white mb-2">
-                Create New Library
+              <h2 className="text-2xl font-bold text-text-primary mb-2 uppercase tracking-wider">
+                CREATE NEW LIBRARY
               </h2>
               <p className="text-text-secondary text-sm">
-                Set up your library management system
+                Set up a new library collection to manage books, members, and issues
               </p>
             </div>
 
-            <form onSubmit={createLibrary} className="space-y-6">
+            <form onSubmit={createLibrary} className="space-y-5">
               <div>
-                <label className="block text-white text-sm font-medium mb-2">
-                  Library Name
+                <label className="block text-text-primary text-sm font-medium mb-2 uppercase tracking-wider font-mono">
+                  LIBRARY NAME
                 </label>
                 <input
                   type="text"
                   value={libraryForm.name}
-                  onChange={(e) => setLibraryForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold"
-                  placeholder="e.g., Central City Library"
+                  onChange={(e) => setLibraryForm(prev => ({ ...prev, name: e.target.value.trimStart() }))}
+                  className="flat-input w-full"
+                  placeholder="Enter library name"
                   required
+                  maxLength={VALIDATION.LIBRARY_NAME_MAX_LENGTH}
+                  autoFocus
                 />
+                <p className="text-text-tertiary text-xs mt-1 font-mono">
+                  {libraryForm.name.length}/{VALIDATION.LIBRARY_NAME_MAX_LENGTH} characters
+                </p>
               </div>
 
               <div>
-                <label className="block text-white text-sm font-medium mb-2">
-                  Description
+                <label className="block text-text-primary text-sm font-medium mb-2 uppercase tracking-wider font-mono">
+                  DESCRIPTION <span className="text-text-tertiary font-normal">(OPTIONAL)</span>
                 </label>
                 <textarea
                   value={libraryForm.description}
                   onChange={(e) => setLibraryForm(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-gold resize-none"
-                  placeholder="Brief description of your library..."
-                  rows={3}
-                  required
+                  className="flat-input w-full resize-none"
+                  placeholder="Add a brief description about this library..."
+                  rows={4}
+                  maxLength={VALIDATION.LIBRARY_DESCRIPTION_MAX_LENGTH}
                 />
+                <p className="text-text-tertiary text-xs mt-1 font-mono">
+                  {libraryForm.description.length}/{VALIDATION.LIBRARY_DESCRIPTION_MAX_LENGTH} characters
+                </p>
               </div>
 
+              <div className="flex space-x-3 pt-4">
               <button
-                type="submit"
-                className="w-full bg-gold text-black py-3 rounded-lg font-sans font-medium hover:bg-yellow-200 transition-colors"
-              >
-                Create Library
+                  type="button"
+                  onClick={() => {
+                    setShowCreateLibrary(false);
+                    setLibraryForm({ name: '', description: '' });
+                  }}
+                  className="flex-1 flat-button py-3"
+                >
+                  CANCEL
               </button>
-            </form>
-
-            {/* Close button */}
             <button
-              onClick={() => setShowCreateLibrary(false)}
-              className="absolute top-4 right-4 text-text-secondary hover:text-white transition-colors"
+                  type="submit"
+                  className="flex-1 flat-button flat-button-primary py-3"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+                  CREATE LIBRARY
             </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Library Management Modal */}
+      {/* Library Manager Modal - Centered */}
       {showLibraryManager && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          {/* Backdrop */}
           <div 
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
-            onClick={() => setShowLibraryManager(false)}
+            className="absolute inset-0 bg-black/80 backdrop-blur-md modal-backdrop" 
+            onClick={() => {
+              setShowLibraryManager(false);
+              setIsDeleteMode(false);
+              setSelectedLibraries(new Set());
+            }}
           ></div>
           
-          {/* Modal */}
-          <div className="relative w-full max-w-lg bg-card border border-border rounded-2xl p-8 shadow-2xl">
-            {/* Delete Mode Toggle Button - Top Left */}
+          <div className="relative w-full max-w-lg flat-card border-2 border-border-accent p-4 md:p-8 overflow-y-auto max-h-[90vh] animate-rigid-pop-in">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 border-2 border-accent-primary flex items-center justify-center" style={{ boxShadow: '0 0 15px rgba(0, 255, 255, 0.2)' }}>
+                  <svg className="w-6 h-6 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-text-primary uppercase tracking-wider">
+                    LIBRARY MANAGER
+                  </h2>
+                  <p className="text-text-secondary text-xs font-mono">
+                    {libraries.length} {libraries.length === 1 ? 'library' : 'libraries'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                {!isDeleteMode && (
             <button
               onClick={toggleDeleteMode}
-              className={`absolute top-4 left-4 w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                isDeleteMode 
-                  ? 'bg-red-600 text-white' 
-                  : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-              }`}
-              title={isDeleteMode ? 'Exit delete mode' : 'Enter delete mode'}
-            >
-              <span className="text-sm font-bold">
-                {isDeleteMode ? '✕' : '🗑️'}
-              </span>
+                    className="w-10 h-10 border-2 border-border-primary hover:border-accent-error text-text-secondary hover:text-accent-error transition-colors flex items-center justify-center"
+                    title="Delete libraries"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
             </button>
+                )}
+                <button
+                  onClick={() => {
+                    setShowLibraryManager(false);
+                    setIsDeleteMode(false);
+                    setSelectedLibraries(new Set());
+                  }}
+                  className="w-10 h-10 border-2 border-border-primary hover:border-accent-error text-text-secondary hover:text-accent-error transition-colors flex items-center justify-center"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
 
-            {/* Batch Delete Actions */}
             {isDeleteMode && (
-              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <div className="flat-card p-4 mb-6 border-accent-error bg-bg-tertiary">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-5 h-5 text-accent-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span className="text-accent-error text-sm font-mono font-bold">
+                      DELETE MODE
+                    </span>
+                  </div>
+                  <button
+                    onClick={toggleDeleteMode}
+                    className="text-text-secondary hover:text-text-primary text-xs font-mono"
+                  >
+                    CANCEL
+                  </button>
+                </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-red-400 text-sm">
-                    {selectedLibraries.size} selected
+                  <span className="text-text-primary text-sm font-mono">
+                    {selectedLibraries.size} of {libraries.length} selected
                   </span>
                   <button
                     onClick={startBatchDelete}
                     disabled={selectedLibraries.size === 0}
-                    className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flat-button border-accent-error text-accent-error hover:bg-accent-error hover:text-bg-primary disabled:opacity-50 disabled:cursor-not-allowed text-xs px-4 py-2"
                   >
-                    Delete Selected
+                    DELETE SELECTED
                   </button>
                 </div>
               </div>
             )}
 
-            <div className="text-center mb-6">
-              <div className="w-12 h-12 bg-gold rounded-xl flex items-center justify-center mx-auto mb-4">
-                <span className="text-black font-sans font-bold text-lg">📚</span>
-              </div>
-              <h2 className="font-sans text-2xl font-bold text-white mb-2">
-                Library Management
-              </h2>
-              <p className="text-text-secondary text-sm">
-                {isDeleteMode 
-                  ? 'Select libraries to delete in batch'
-                  : 'Manage your libraries, switch between them, or create new ones'
-                }
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              {/* Create New Library */}
+            <div className="space-y-3">
               {!isDeleteMode && (
                 <button
                   onClick={() => {
                     setShowLibraryManager(false);
                     setShowCreateLibrary(true);
                   }}
-                  className="w-full flex items-center space-x-3 p-4 rounded-lg hover:bg-gold/10 transition-colors border border-gold/20"
+                  className="w-full flat-card p-4 text-left hover:border-accent-primary transition-colors group"
                 >
-                  <div className="w-10 h-10 bg-gold rounded-lg flex items-center justify-center">
-                    <span className="text-black font-bold text-lg">+</span>
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 border-2 border-accent-primary flex items-center justify-center group-hover:bg-accent-primary/10 transition-colors">
+                      <svg className="w-6 h-6 text-accent-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
                   </div>
-                  <div className="text-left">
-                    <p className="text-white font-medium">Create New Library</p>
-                    <p className="text-text-secondary text-sm">Add another library to manage</p>
+                    <div>
+                      <p className="text-text-primary font-medium uppercase text-sm">CREATE NEW LIBRARY</p>
+                      <p className="text-text-secondary text-xs font-mono">Add a new collection</p>
+                    </div>
                   </div>
                 </button>
               )}
 
-              {/* All Libraries */}
-              {libraries.length > 0 && (
+              {libraries.length > 0 ? (
                 <div>
-                  <p className="text-text-secondary text-sm mb-3 px-2">Your Libraries ({libraries.length}):</p>
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                  <p className="text-text-tertiary text-xs uppercase tracking-wider mb-3 font-mono">
+                    YOUR LIBRARIES
+                  </p>
+                  <div className="space-y-2">
                     {libraries.map((library) => {
                       const isActive = library.id === currentLibrary?.id;
                       const isSelected = selectedLibraries.has(library.id);
                       return (
                         <div
                           key={library.id}
-                          className={`w-full flex items-center space-x-3 p-4 rounded-lg transition-colors ${
+                          className={`flat-card p-4 transition-all ${
                             isDeleteMode
                               ? isSelected
-                                ? 'bg-red-500/20 border border-red-500/40'
-                                : 'hover:bg-red-500/10 border border-transparent'
+                                ? 'border-accent-error bg-accent-error/10'
+                                : 'hover:border-accent-error cursor-pointer'
                               : isActive 
-                                ? 'bg-gold/20 border border-gold/40' 
-                                : 'hover:bg-blue-500/10 border border-transparent'
+                                ? 'border-accent-primary bg-bg-tertiary' 
+                                : 'hover:border-accent-primary/50 cursor-pointer'
                           }`}
+                          onClick={isDeleteMode ? () => toggleLibrarySelection(library.id) : undefined}
                         >
-                          {/* Checkbox for delete mode */}
                           {isDeleteMode ? (
-                            <button
-                              onClick={() => toggleLibrarySelection(library.id)}
-                              className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${
+                            <div className="flex items-center space-x-4">
+                              <div className={`w-6 h-6 border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
                                 isSelected
-                                  ? 'bg-red-600 border-red-600 text-white'
-                                  : 'border-red-400 hover:border-red-500'
-                              }`}
-                            >
-                              {isSelected && <span className="text-sm font-bold">✓</span>}
-                            </button>
-                          ) : (
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                              isActive ? 'bg-gold' : 'bg-blue-600'
-                            }`}>
-                              <span className={`font-bold text-lg ${
-                                isActive ? 'text-black' : 'text-white'
+                                  ? 'border-accent-error bg-accent-error text-bg-primary'
+                                  : 'border-border-primary'
                               }`}>
-                                {isActive ? '✓' : '📚'}
-                              </span>
+                                {isSelected && (
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
                             </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-text-primary font-medium truncate">{library.name}</p>
+                                {library.description && (
+                                  <p className="text-text-secondary text-xs font-mono truncate mt-1">{library.description}</p>
                           )}
-                          
-                          {/* Library info */}
+                              </div>
+                            </div>
+                          ) : (
                           <button
-                            onClick={() => {
-                              if (isDeleteMode) {
-                                toggleLibrarySelection(library.id);
-                              } else if (!isActive) {
-                                switchLibrary(library);
-                              }
-                            }}
-                            className="text-left flex-1"
-                            disabled={!isDeleteMode && isActive}
-                          >
-                            <div className="flex items-center space-x-2">
-                              <p className={`font-medium ${
-                                isDeleteMode
-                                  ? isSelected ? 'text-red-400' : 'text-white'
-                                  : isActive ? 'text-gold' : 'text-white'
+                              onClick={() => !isActive && switchLibrary(library)}
+                              className="w-full text-left flex items-center justify-between"
+                              disabled={isActive}
+                            >
+                              <div className="flex items-center space-x-4 flex-1 min-w-0">
+                                <div className={`w-12 h-12 border-2 flex items-center justify-center flex-shrink-0 ${
+                                  isActive ? 'border-accent-primary' : 'border-border-primary'
+                                }`}>
+                                  <svg className={`w-6 h-6 ${isActive ? 'text-accent-primary' : 'text-text-secondary'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                  </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`font-medium truncate ${
+                                    isActive ? 'text-accent-primary' : 'text-text-primary'
                               }`}>
                                 {library.name}
                               </p>
-                              {!isDeleteMode && isActive && (
-                                <span className="bg-gold/20 text-gold text-xs font-semibold px-2 py-1 rounded">
-                                  ACTIVE
-                                </span>
+                                  {library.description ? (
+                                    <p className="text-text-secondary text-xs font-mono truncate mt-1">{library.description}</p>
+                                  ) : (
+                                    <p className="text-text-tertiary text-xs font-mono mt-1">{library.id.slice(0, 8)}</p>
                               )}
                             </div>
-                            <p className="text-text-secondary text-sm line-clamp-1">{library.description}</p>
+                              </div>
+                              {isActive && (
+                                <span className="flat-badge flat-badge-primary ml-2 flex-shrink-0">ACTIVE</span>
+                              )}
                           </button>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                 </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 border-2 border-border-primary flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+            </div>
+                  <p className="text-text-secondary text-sm font-sans mb-4">No libraries yet</p>
+            <button
+                    onClick={() => {
+                      setShowLibraryManager(false);
+                      setShowCreateLibrary(true);
+                    }}
+                    className="flat-button flat-button-primary text-xs px-4 py-2"
+                  >
+                    CREATE FIRST LIBRARY
+            </button>
+                </div>
               )}
             </div>
-
-            {/* Close button */}
-            <button
-              onClick={() => setShowLibraryManager(false)}
-              className="absolute top-4 right-4 text-text-secondary hover:text-white transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
           </div>
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal - Center Overlay */}
       {showDeleteConfirmation && (
         <div className="fixed inset-0 z-[101] flex items-center justify-center p-4">
-          {/* Backdrop */}
           <div 
-            className="absolute inset-0 bg-black/90 backdrop-blur-sm" 
+            className="absolute inset-0 bg-black/80 backdrop-blur-md modal-backdrop" 
             onClick={() => {
               setShowDeleteConfirmation(false);
               setDeleteConfirmationText('');
             }}
           ></div>
           
-          {/* Modal */}
-          <div className="relative w-full max-w-md bg-card border border-red-500/50 rounded-2xl p-8 shadow-2xl">
+          <div className="relative w-full max-w-lg flat-card p-8 border-2 border-accent-error animate-rigid-pop-in">
+            <button
+              onClick={() => {
+                setShowDeleteConfirmation(false);
+                setDeleteConfirmationText('');
+              }}
+              className="absolute top-4 right-4 text-text-secondary hover:text-accent-error transition-colors w-8 h-8 flex items-center justify-center border border-border-primary hover:border-accent-error"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
             <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-red-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <span className="text-white font-sans font-bold text-2xl">⚠️</span>
+              <div className="w-20 h-20 border-2 border-accent-error flex items-center justify-center mx-auto mb-4" style={{ boxShadow: '0 0 20px rgba(255, 0, 0, 0.3)' }}>
+                <svg className="w-10 h-10 text-accent-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
               </div>
-              <h2 className="font-sans text-2xl font-bold text-red-400 mb-2">
-                Confirm Deletion
+              <h2 className="text-2xl font-bold text-accent-error mb-2 uppercase tracking-wider">
+                CONFIRM DELETION
               </h2>
               <p className="text-text-secondary text-sm">
-                This action cannot be undone. This will permanently delete the selected libraries and all their data.
+                This action cannot be undone. All data in these libraries will be permanently deleted.
               </p>
             </div>
 
-            <div className="space-y-4">
-              {/* Libraries to be deleted */}
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-                <p className="text-red-400 text-sm font-medium mb-2">
-                  Libraries to be deleted ({selectedLibraries.size}):
-                </p>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
+            <div className="space-y-5">
+              <div className="flat-card p-4 border-accent-error bg-bg-tertiary">
+                <div className="flex items-center space-x-2 mb-3">
+                  <svg className="w-5 h-5 text-accent-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                  <p className="text-accent-error text-sm font-medium uppercase font-mono">
+                    LIBRARIES TO DELETE ({selectedLibraries.size})
+                  </p>
+                </div>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
                   {libraries
                     .filter(lib => selectedLibraries.has(lib.id))
                     .map(library => (
-                      <div key={library.id} className="text-white text-sm py-1">
-                        • {library.name}
+                      <div key={library.id} className="flex items-start space-x-2">
+                        <svg className="w-4 h-4 text-accent-error mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-text-primary text-sm font-medium truncate">{library.name}</p>
+                          {library.description && (
+                            <p className="text-text-secondary text-xs font-mono truncate mt-0.5">{library.description}</p>
+                          )}
+                        </div>
                       </div>
                     ))
                   }
                 </div>
               </div>
 
-              {/* Confirmation input */}
               <div>
-                <label className="block text-white text-sm font-medium mb-2">
-                  Type the library names separated by commas to confirm:
+                <label className="block text-text-primary text-sm font-medium mb-2 uppercase font-mono">
+                  TYPE TO CONFIRM: <span className="text-accent-error">DELETE</span>
                 </label>
-                <div className="mb-2">
-                  <code className="text-xs text-text-secondary bg-black/50 px-2 py-1 rounded">
-                    {libraries
-                      .filter(lib => selectedLibraries.has(lib.id))
-                      .map(lib => lib.name)
-                      .join(', ')
-                    }
-                  </code>
-                </div>
                 <input
                   type="text"
                   value={deleteConfirmationText}
                   onChange={(e) => setDeleteConfirmationText(e.target.value)}
-                  className="w-full px-4 py-3 bg-black border border-border rounded-lg text-white placeholder-text-secondary focus:outline-none focus:border-red-500"
-                  placeholder="Type the library names here..."
+                  className="flat-input w-full"
+                  placeholder="Type 'DELETE' to confirm"
                   autoFocus
                 />
+                <p className="text-text-tertiary text-xs mt-2 font-mono">
+                  Type the word &quot;DELETE&quot; to confirm this action
+                </p>
               </div>
 
-              {/* Action buttons */}
-              <div className="flex space-x-3 pt-4">
+              <div className="flex space-x-3 pt-2">
                 <button
                   onClick={() => {
                     setShowDeleteConfirmation(false);
                     setDeleteConfirmationText('');
                   }}
-                  className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-gray-700 transition-colors"
+                  className="flex-1 flat-button py-3"
                 >
-                  Cancel
+                  CANCEL
                 </button>
                 <button
                   onClick={confirmBatchDelete}
-                  disabled={deleteConfirmationText !== libraries
-                    .filter(lib => selectedLibraries.has(lib.id))
-                    .map(lib => lib.name)
-                    .join(', ')
-                  }
-                  className="flex-1 bg-red-600 text-white py-3 rounded-lg font-sans font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={deleteConfirmationText.trim().toUpperCase() !== DELETE_CONFIRMATION_TEXT}
+                  className="flex-1 flat-button border-accent-error text-accent-error hover:bg-accent-error hover:text-bg-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Delete Libraries
+                  DELETE LIBRARIES
                 </button>
               </div>
             </div>
-
-            {/* Close button */}
-            <button
-              onClick={() => {
-                setShowDeleteConfirmation(false);
-                setDeleteConfirmationText('');
-              }}
-              className="absolute top-4 right-4 text-text-secondary hover:text-white transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
           </div>
         </div>
       )}
-
-      {/* Floating Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 z-50 p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="enhanced-blur rounded-2xl px-6 py-4 sleek-shadow">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-6 h-6 bg-gold rounded-lg flex items-center justify-center logo-container footer-logo">
-                  <span className="text-black font-sans font-bold text-xs">B</span>
-                </div>
-                <p className="font-sans text-text-secondary text-sm">
-                  © 2025 Bibliotheque. <span className="hidden md:inline">Built for <span className="text-gold">library administrators</span>.</span>
-                </p>
-              </div>
-              <div className="flex items-center">
-                <Link href="https://capable-twist-8f4.notion.site/Bibliotheque-Library-Management-207ecc0d8b2880e1a6efde72da0c0cc8" className="text-text-secondary hover:text-gold transition-colors font-sans text-sm nav-link">Documentation</Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 } 
