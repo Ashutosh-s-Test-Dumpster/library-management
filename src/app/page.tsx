@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import AuthDebug from "@/components/AuthDebug";
 
@@ -11,7 +10,6 @@ export default function Home() {
   const [isAtBottom, setIsAtBottom] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { signInWithGoogle, loading, error, setError } = useAuth();
-  const router = useRouter();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -159,7 +157,7 @@ export default function Home() {
       </section>
 
       {/* Feature Sections */}
-      {features.map((feature, index) => (
+      {features.map((feature) => (
         <section key={feature.id} id={feature.id} className="snap-section feature-section">
           <div className={`feature-card-large rounded-2xl p-4 md:p-6 ${feature.highlight ? 'feature-highlight' : 'feature-normal'}`}>
             <div className="text-center mb-4">
