@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import Portal from '@/components/Portal';
 
@@ -57,39 +57,10 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
     issue_date: new Date().toISOString().split('T')[0]
   });
 
-  const [filterBy, setFilterBy] = useState('all');
+  const [filterBy, setFilterBy] = useState<'all' | 'book' | 'member' | 'status'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    loadData();
-  }, [libraryId]);
-
-  // Add keyboard shortcut handler
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if we're in an input field or any modal is open
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        showIssueModal ||
-        showBookSearchModal ||
-        showMemberSearchModal
-      ) {
-        return;
-      }
-
-      // Open issue modal with 'a' key
-      if (e.key === 'a' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        setShowIssueModal(true);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showIssueModal, showBookSearchModal, showMemberSearchModal]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -135,7 +106,36 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [libraryId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Add keyboard shortcut handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if we're in an input field or any modal is open
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        showIssueModal ||
+        showBookSearchModal ||
+        showMemberSearchModal
+      ) {
+        return;
+      }
+
+      // Open issue modal with 'a' key
+      if (e.key === 'a' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setShowIssueModal(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showIssueModal, showBookSearchModal, showMemberSearchModal]);
 
   const resetForm = () => {
     setIssueForm({
@@ -198,9 +198,10 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
       setShowIssueModal(false);
       resetForm();
       alert('Book issued successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to issue book';
       console.error('Error issuing book:', error);
-      alert(`Failed to issue book: ${error.message}`);
+      alert(`Failed to issue book: ${errorMessage}`);
     }
   };
 
@@ -212,7 +213,7 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
     try {
       const returnDate = new Date().toISOString().split('T')[0];
       
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('issue_management')
         .update({ i_date_of_ret: returnDate })
         .eq('id', issue.id)
@@ -229,9 +230,10 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
       ));
 
       alert('Book returned successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to return book';
       console.error('Error returning book:', error);
-      alert(`Failed to return book: ${error.message}`);
+      alert(`Failed to return book: ${errorMessage}`);
     }
   };
 
@@ -320,7 +322,7 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
               <div className="relative">
                 <select
                   value={filterBy}
-                  onChange={(e) => setFilterBy(e.target.value as any)}
+                  onChange={(e) => setFilterBy(e.target.value as 'all' | 'book' | 'member' | 'status')}
                   className="h-full px-4 py-2 bg-black border border-r-0 border-green-800 rounded-l-lg text-white text-sm focus:outline-none group-hover:border-green-800 transition-colors"
                 >
                   <option value="all">All Fields</option>
@@ -359,13 +361,13 @@ export default function IssueManagement({ libraryId }: IssueManagementProps) {
         <div className="enhanced-blur rounded-2xl p-2">
           <div className="flex space-x-2">
             {[
-              { key: 'active', label: 'Active Issues', count: issues.filter(i => !i.i_date_of_ret).length },
-              { key: 'returned', label: 'Returned', count: issues.filter(i => i.i_date_of_ret).length },
-              { key: 'all', label: 'All Issues', count: issues.length }
+              { key: 'active' as const, label: 'Active Issues', count: issues.filter(i => !i.i_date_of_ret).length },
+              { key: 'returned' as const, label: 'Returned', count: issues.filter(i => i.i_date_of_ret).length },
+              { key: 'all' as const, label: 'All Issues', count: issues.length }
             ].map((tab) => (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key as any)}
+                onClick={() => setActiveTab(tab.key)}
                 className={`px-4 py-2 rounded-lg font-sans text-sm transition-all ${
                   activeTab === tab.key
                     ? 'bg-gold text-black'

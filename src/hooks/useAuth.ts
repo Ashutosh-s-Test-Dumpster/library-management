@@ -26,10 +26,11 @@ export const useAuth = () => {
       if (error) throw error
 
       return { success: true, data }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Google authentication failed'
       console.error('Google auth error:', err)
-      setError(err.message || 'Google authentication failed')
-      return { success: false, error: err.message }
+      setError(errorMessage)
+      return { success: false, error: errorMessage }
     } finally {
       setLoading(false)
     }
@@ -50,10 +51,11 @@ export const useAuth = () => {
       if (error) throw error
 
       return { success: true }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Sign out failed'
       console.error('Signout error:', err)
-      setError(err.message || 'Sign out failed')
-      return { success: false, error: err.message }
+      setError(errorMessage)
+      return { success: false, error: errorMessage }
     } finally {
       setLoading(false)
     }

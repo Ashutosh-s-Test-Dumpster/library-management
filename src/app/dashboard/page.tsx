@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import Image from "next/image";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
@@ -18,36 +19,16 @@ interface Library {
   user_id: string;
 }
 
-interface Book {
-  id: number;
-  code: number;
-  name: string;
-  author: string;
-  price: number;
-  library_id: string;
-}
-
-interface Member {
-  id: number;
-  code: number;
-  name: string;
-  phone: string;
-  library_id: string;
-}
-
-interface Issue {
-  id: number;
-  book_code: number;
-  member_code: number;
-  issue_date: string;
-  return_date: string | null;
-  library_id: string;
+interface UserProfile {
+  name?: string;
+  email?: string;
+  avatar?: string;
+  initials?: string;
 }
 
 export default function Dashboard() {
   const [isAtTop, setIsAtTop] = useState(true);
-  const [isAtBottom, setIsAtBottom] = useState(false);
-  const [userProfile, setUserProfile] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [libraries, setLibraries] = useState<Library[]>([]);
@@ -61,6 +42,7 @@ export default function Dashboard() {
     activeIssues: 0,
     overdueBooks: 0
   });
+  const [avatarError, setAvatarError] = useState(false);
   
   // Library creation form
   const [libraryForm, setLibraryForm] = useState({
@@ -80,14 +62,9 @@ export default function Dashboard() {
   useEffect(() => {
     const handleScroll = () => {
       const scrollTop = window.scrollY;
-      const windowHeight = window.innerHeight;
-      const documentHeight = document.documentElement.scrollHeight;
       
       // Check if at top (with small threshold)
       setIsAtTop(scrollTop <= 10);
-      
-      // Check if at bottom (with small threshold)
-      setIsAtBottom(scrollTop + windowHeight >= documentHeight - 10);
     };
 
     // Set initial state
@@ -100,75 +77,7 @@ export default function Dashboard() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    // Verify authentication and get user profile
-    const verifyAuthAndGetUser = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Check if user is authenticated
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('Session error:', sessionError);
-          router.push('/');
-          return;
-        }
-
-        if (!session || !session.user) {
-          console.log('No valid session found, redirecting to home');
-          router.push('/');
-          return;
-        }
-
-        // Session is valid, set authentication state
-        setIsAuthenticated(true);
-        
-        // Get user profile data
-        const user = session.user;
-        setUserProfile({
-          name: user.user_metadata?.full_name || user.email,
-          email: user.email,
-          avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture,
-          initials: (user.user_metadata?.full_name || user.email || '')
-            .split(' ')
-            .map((n: string) => n[0])
-            .join('')
-            .toUpperCase()
-            .slice(0, 2)
-        });
-
-        // Load user's libraries
-        await loadLibraries(user.id);
-
-        console.log('User authenticated successfully:', {
-          email: user.email,
-          name: user.user_metadata?.full_name
-        });
-        
-      } catch (error) {
-        console.error('Error verifying authentication:', error);
-        router.push('/');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    verifyAuthAndGetUser();
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state changed:', event, session?.user?.email);
-      
-      if (event === 'SIGNED_OUT' || !session) {
-        router.push('/');
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [router]);
-
-  const loadStats = async (libraryId: string) => {
+  const loadStats = useCallback(async (libraryId: string) => {
     try {
       // Load books count
       const { count: booksCount } = await supabase
@@ -209,9 +118,9 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error loading stats:', error);
     }
-  };
+  }, []);
 
-  const loadLibraries = async (userId: string) => {
+  const loadLibraries = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('libraries')
@@ -230,7 +139,76 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error loading libraries:', error);
     }
-  };
+  }, [loadStats]);
+
+  useEffect(() => {
+    // Verify authentication and get user profile
+    const verifyAuthAndGetUser = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Check if user is authenticated
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          router.push('/');
+          return;
+        }
+
+        if (!session || !session.user) {
+          console.log('No valid session found, redirecting to home');
+          router.push('/');
+          return;
+        }
+
+        // Session is valid, set authentication state
+        setIsAuthenticated(true);
+        
+        // Get user profile data
+        const user = session.user;
+        setUserProfile({
+          name: user.user_metadata?.full_name || user.email,
+          email: user.email,
+          avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+          initials: (user.user_metadata?.full_name || user.email || '')
+            .split(' ')
+            .map((n: string) => n[0])
+            .join('')
+            .toUpperCase()
+            .slice(0, 2)
+        });
+        setAvatarError(false); // Reset avatar error when user profile is set
+
+        // Load user's libraries
+        await loadLibraries(user.id);
+
+        console.log('User authenticated successfully:', {
+          email: user.email,
+          name: user.user_metadata?.full_name
+        });
+        
+      } catch (error) {
+        console.error('Error verifying authentication:', error);
+        router.push('/');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    verifyAuthAndGetUser();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event, session?.user?.email);
+      
+      if (event === 'SIGNED_OUT' || !session) {
+        router.push('/');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router, loadLibraries]);
 
   const createLibrary = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -287,41 +265,6 @@ export default function Dashboard() {
     setActiveTab('overview');
     // Load stats for the new library
     await loadStats(library.id);
-  };
-
-  const deleteLibrary = async (library: Library) => {
-    if (!confirm(`Are you sure you want to delete "${library.name}"? This will permanently delete all books, members, and issues in this library.`)) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('libraries')
-        .delete()
-        .eq('id', library.id);
-
-      if (error) throw error;
-
-      // Remove from libraries list
-      const updatedLibraries = libraries.filter(l => l.id !== library.id);
-      setLibraries(updatedLibraries);
-
-      // If we deleted the current library, switch to the first available one
-      if (currentLibrary?.id === library.id) {
-        if (updatedLibraries.length > 0) {
-          setCurrentLibrary(updatedLibraries[0]);
-          await loadStats(updatedLibraries[0].id);
-        } else {
-          setCurrentLibrary(null);
-        }
-      }
-
-      setShowLibraryManager(false);
-      alert('Library deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting library:', error);
-      alert('Failed to delete library. Please try again.');
-    }
   };
 
   const toggleDeleteMode = () => {
@@ -437,12 +380,12 @@ export default function Dashboard() {
       channels.forEach((ch) => {
         try {
           supabase.removeChannel(ch);
-        } catch (_) {
+        } catch {
           /* ignore */
         }
       });
     };
-  }, [currentLibrary]);
+  }, [currentLibrary, loadStats]);
 
   // Show loading state while verifying authentication
   if (isLoading || !isAuthenticated) {
@@ -493,19 +436,14 @@ export default function Dashboard() {
                 <div className="flex items-center space-x-3">
                   {/* Profile Picture */}
                   <div className={`w-8 h-8 rounded-full overflow-hidden border-2 border-gold/30 ${isAtTop ? 'expanded' : ''}`}>
-                    {userProfile?.avatar ? (
-                      <img 
+                    {userProfile?.avatar && !avatarError ? (
+                      <Image 
                         src={userProfile.avatar} 
-                        alt={userProfile.name}
+                        alt={userProfile.name || 'User avatar'}
+                        width={32}
+                        height={32}
                         className="w-full h-full object-cover"
-                        onError={(e) => {
-                          // Fallback to initials if image fails to load
-                          e.currentTarget.style.display = 'none';
-                          const parent = e.currentTarget.parentElement;
-                          if (parent) {
-                            parent.innerHTML = `<div class="w-full h-full bg-gold flex items-center justify-center text-black text-xs font-bold">${userProfile.initials}</div>`;
-                          }
-                        }}
+                        onError={() => setAvatarError(true)}
                       />
                     ) : (
                       <div className="w-full h-full bg-gold flex items-center justify-center text-black text-xs font-bold">
@@ -528,19 +466,14 @@ export default function Dashboard() {
               <div className="hidden md:flex items-center space-x-4">
                 {/* Profile Picture */}
                 <div className={`w-10 h-10 rounded-full overflow-hidden border-2 border-gold/30 ${isAtTop ? 'expanded' : ''}`}>
-                  {userProfile?.avatar ? (
-                    <img 
+                  {userProfile?.avatar && !avatarError ? (
+                    <Image 
                       src={userProfile.avatar} 
-                      alt={userProfile.name}
+                      alt={userProfile.name || 'User avatar'}
+                      width={40}
+                      height={40}
                       className="w-full h-full object-cover"
-                      onError={(e) => {
-                        // Fallback to initials if image fails to load
-                        e.currentTarget.style.display = 'none';
-                        const parent = e.currentTarget.parentElement;
-                        if (parent) {
-                          parent.innerHTML = `<div class="w-full h-full bg-gold flex items-center justify-center text-black text-sm font-bold">${userProfile.initials}</div>`;
-                        }
-                      }}
+                      onError={() => setAvatarError(true)}
                     />
                   ) : (
                     <div className="w-full h-full bg-gold flex items-center justify-center text-black text-sm font-bold">
@@ -607,14 +540,14 @@ export default function Dashboard() {
               <div className="enhanced-blur rounded-2xl p-2">
                 <div className="flex space-x-2">
                   {[
-                    { key: 'overview', label: 'Overview', icon: '📊' },
-                    { key: 'books', label: 'Books', icon: '📚' },
-                    { key: 'members', label: 'Members', icon: '👥' },
-                    { key: 'issues', label: 'Issues', icon: '📋' }
+                    { key: 'overview' as const, label: 'Overview', icon: '📊' },
+                    { key: 'books' as const, label: 'Books', icon: '📚' },
+                    { key: 'members' as const, label: 'Members', icon: '👥' },
+                    { key: 'issues' as const, label: 'Issues', icon: '📋' }
                   ].map((tab) => (
                     <button
                       key={tab.key}
-                      onClick={() => setActiveTab(tab.key as any)}
+                      onClick={() => setActiveTab(tab.key)}
                       className={`px-4 py-2 rounded-lg font-sans text-sm transition-all ${
                         activeTab === tab.key
                           ? 'bg-gold text-black'

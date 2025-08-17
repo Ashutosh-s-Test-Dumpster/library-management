@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import Portal from '@/components/Portal';
 
@@ -33,7 +33,7 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
     m_phone: ''
   });
 
-  const getNextMemberCode = async () => {
+  const getNextMemberCode = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('member_management')
@@ -51,13 +51,9 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
       console.error('Error getting next member code:', error);
       return 1001; // Fallback to 1001 if error occurs
     }
-  };
-
-  useEffect(() => {
-    loadMembers();
   }, [libraryId]);
 
-  const loadMembers = async () => {
+  const loadMembers = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -74,7 +70,11 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [libraryId]);
+
+  useEffect(() => {
+    loadMembers();
+  }, [loadMembers]);
 
   const resetForm = () => {
     setMemberForm({
@@ -150,9 +150,10 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
       setShowAddModal(false);
       resetForm();
       alert('Member added successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add member';
       console.error('Error adding member:', error);
-      alert(`Failed to add member: ${error.message}`);
+      alert(`Failed to add member: ${errorMessage}`);
     }
   };
 
@@ -206,9 +207,10 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
       setEditingMember(null);
       resetForm();
       alert('Member updated successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update member';
       console.error('Error updating member:', error);
-      alert(`Failed to update member: ${error.message}`);
+      alert(`Failed to update member: ${errorMessage}`);
     }
   };
 
@@ -240,9 +242,10 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
 
       setMembers(prev => prev.filter(m => m.id !== member.id));
       alert('Member deleted successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete member';
       console.error('Error deleting member:', error);
-      alert(`Failed to delete member: ${error.message}`);
+      alert(`Failed to delete member: ${errorMessage}`);
     }
   };
 
@@ -291,7 +294,7 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
       // Reset form when modal closes
       resetForm();
     }
-  }, [showAddModal]);
+  }, [showAddModal, getNextMemberCode]);
 
   // Add keyboard shortcut handler
   useEffect(() => {
@@ -340,7 +343,7 @@ export default function MemberManagement({ libraryId }: MemberManagementProps) {
               <div className="relative">
                 <select
                   value={filterBy}
-                  onChange={(e) => setFilterBy(e.target.value as any)}
+                  onChange={(e) => setFilterBy(e.target.value as 'all' | 'name' | 'code')}
                   className="h-full px-4 py-2 bg-black border border-r-0 border-green-800 rounded-l-lg text-white text-sm focus:outline-none group-hover:border-green-800 transition-colors"
                 >
                   <option value="all">All Fields</option>

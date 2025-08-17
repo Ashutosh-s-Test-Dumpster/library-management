@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import Portal from '@/components/Portal';
 
@@ -42,9 +42,28 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
   // entry mode for add book modal
   const [entryMode, setEntryMode] = useState<'isbn' | 'manual'>('isbn');
 
+  const loadBooks = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('book_management')
+        .select('*')
+        .eq('library_id', libraryId)
+        .order('b_code', { ascending: true });
+
+      if (error) throw error;
+      setBooks(data || []);
+    } catch (error) {
+      console.error('Error loading books:', error);
+      alert('Failed to load books. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [libraryId]);
+
   useEffect(() => {
     loadBooks();
-  }, [libraryId]);
+  }, [loadBooks]);
 
   // Keyboard shortcut to open Add Book modal
   useEffect(() => {
@@ -72,25 +91,6 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showAddModal]);
 
-  const loadBooks = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('book_management')
-        .select('*')
-        .eq('library_id', libraryId)
-        .order('b_code', { ascending: true });
-
-      if (error) throw error;
-      setBooks(data || []);
-    } catch (error) {
-      console.error('Error loading books:', error);
-      alert('Failed to load books. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const resetForm = () => {
     setBookForm({
       isbn: '',
@@ -109,7 +109,7 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
       const maxCode = books.reduce((max, b) => Math.max(max, b.b_code), 0);
       setBookForm((prev) => ({ ...prev, b_code: (maxCode + 1).toString() }));
     }
-  }, [showAddModal]);
+  }, [showAddModal, books]);
 
   // ISBN lookup on blur
   const lookupISBN = async (isbn: string) => {
@@ -126,8 +126,9 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
         }));
         // Clear any existing ISBN error if lookup succeeded
         setErrors(prev => {
-          const { isbn, ...rest } = prev;
-          return rest;
+          const newErrors = { ...prev };
+          delete newErrors.isbn;
+          return newErrors;
         });
         return true;
       }
@@ -211,9 +212,10 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
       resetForm();
       // Show toast could be implemented; for now reset error state
       setErrors({});
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add book';
       console.error('Error adding book:', error);
-      setErrors({ submit: error.message || 'Failed to add book' });
+      setErrors({ submit: errorMessage });
     }
   };
 
@@ -261,9 +263,10 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
       setEditingBook(null);
       resetForm();
       alert('Book updated successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update book';
       console.error('Error updating book:', error);
-      alert(`Failed to update book: ${error.message}`);
+      alert(`Failed to update book: ${errorMessage}`);
     }
   };
 
@@ -295,9 +298,10 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
 
       setBooks(prev => prev.filter(b => b.id !== book.id));
       alert('Book deleted successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete book';
       console.error('Error deleting book:', error);
-      alert(`Failed to delete book: ${error.message}`);
+      alert(`Failed to delete book: ${errorMessage}`);
     }
   };
 
@@ -355,7 +359,7 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
               <div className="relative">
                 <select
                   value={filterBy}
-                  onChange={(e) => setFilterBy(e.target.value as any)}
+                  onChange={(e) => setFilterBy(e.target.value as 'all' | 'name' | 'author' | 'code')}
                   className="h-full px-4 py-2 bg-black border border-r-0 border-green-800 rounded-l-lg text-white text-sm focus:outline-none group-hover:border-green-800 transition-colors"
                 >
                   <option value="all">All Fields</option>
@@ -466,7 +470,7 @@ export default function BookManagement({ libraryId }: BookManagementProps) {
                       key={mode}
                       type="button"
                       onClick={() => {
-                        setEntryMode(mode as any);
+                        setEntryMode(mode as 'isbn' | 'manual');
                         // Reset form when switching to manual mode
                         if (mode === 'manual') {
                           setBookForm(prev => ({
